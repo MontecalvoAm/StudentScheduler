@@ -1,0 +1,341 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ─────────────────────────────────────────
+// USERS & ROLES
+// ─────────────────────────────────────────
+
+model sched_Roles {
+  RoleId      Int    @id @default(autoincrement())
+  RoleName    String @unique @db.VarChar(50)
+  Description String? @db.VarChar(255)
+  CreatedAt   DateTime @default(now())
+  UpdatedAt   DateTime @updatedAt
+
+  Users sched_Users[]
+}
+
+model sched_Users {
+  UserId            Int       @id @default(autoincrement())
+  RoleId            Int
+  Email             String    @unique @db.VarChar(255)
+  PasswordHash      String    @db.VarChar(255)
+  FirstName         String    @db.VarChar(100)
+  LastName          String    @db.VarChar(100)
+  MiddleName        String?   @db.VarChar(100)
+  IsActive          Boolean   @default(true)
+  IsLocked          Boolean   @default(false)
+  FailedLoginCount  Int       @default(0)
+  LockedUntil       DateTime?
+  LastLoginAt       DateTime?
+  PasswordChangedAt DateTime?
+  MfaSecret         String?   @db.VarChar(255) // TOTP scaffold — not enforced Phase 1
+  MfaEnabled        Boolean   @default(false)
+  CreatedAt         DateTime  @default(now())
+  UpdatedAt         DateTime  @updatedAt
+  DeletedAt         DateTime? // soft delete
+
+  Role          sched_Roles            @relation(fields: [RoleId], references: [RoleId])
+  Student       sched_Students?
+  Instructor    sched_Instructors?
+  RefreshTokens sched_RefreshTokens[]
+  AuditLogs     sched_AuditLogs[]
+
+  @@index([RoleId])
+  @@index([Email])
+  @@index([DeletedAt])
+}
+
+model sched_RefreshTokens {
+  TokenId   Int      @id @default(autoincrement())
+  UserId    Int
+  TokenHash String   @unique @db.VarChar(512)
+  ExpiresAt DateTime
+  IsRevoked Boolean  @default(false)
+  CreatedAt DateTime @default(now())
+  IpAddress String?  @db.VarChar(45)
+  UserAgent String?  @db.VarChar(500)
+
+  User sched_Users @relation(fields: [UserId], references: [UserId])
+
+  @@index([UserId])
+  @@index([ExpiresAt])
+}
+
+// ─────────────────────────────────────────
+// PROFILES
+// ─────────────────────────────────────────
+
+model sched_Students {
+  StudentId     Int       @id @default(autoincrement())
+  UserId        Int       @unique
+  StudentNumber String    @unique @db.VarChar(50)
+  CourseId      Int?
+  YearLevel     Int?
+  Section       String?   @db.VarChar(20)
+  StudySession  String?   @db.VarChar(10) // Renamed for Session (Day/Night)
+  CreatedAt     DateTime  @default(now())
+  UpdatedAt     DateTime  @updatedAt
+  DeletedAt     DateTime?
+
+  User              sched_Users              @relation(fields: [UserId], references: [UserId])
+  Course            sched_Courses?           @relation(fields: [CourseId], references: [CourseId])
+  Enrollments       sched_Enrollments[]
+  AttendanceRecords sched_AttendanceRecords[]
+
+  @@index([CourseId])
+  @@index([StudentNumber])
+}
+
+model sched_Instructors {
+  InstructorId   Int       @id @default(autoincrement())
+  UserId         Int       @unique
+  EmployeeNumber String    @unique @db.VarChar(50)
+  Department     String?   @db.VarChar(100)
+  Specialization String?   @db.VarChar(100)
+  CreatedAt      DateTime  @default(now())
+  UpdatedAt      DateTime  @updatedAt
+  DeletedAt      DateTime?
+
+  User             sched_Users              @relation(fields: [UserId], references: [UserId])
+  ClassAssignments sched_ClassAssignments[]
+}
+
+// ─────────────────────────────────────────
+// ACADEMIC STRUCTURE
+// ─────────────────────────────────────────
+
+model sched_Courses {
+  CourseId    Int       @id @default(autoincrement())
+  CourseCode  String    @unique @db.VarChar(20)
+  CourseName  String    @db.VarChar(200)
+  Description String?   @db.Text
+  IsActive    Boolean   @default(true)
+  CreatedAt   DateTime  @default(now())
+  UpdatedAt   DateTime  @updatedAt
+
+  Students sched_Students[]
+  Subjects sched_Subjects[]
+}
+
+model sched_Subjects {
+  SubjectId   Int      @id @default(autoincrement())
+  CourseId    Int?
+  SubjectCode String   @unique @db.VarChar(20)
+  SubjectName String   @db.VarChar(200)
+  Units       Int      @default(3)
+  Description String?  @db.Text
+  IsActive    Boolean  @default(true)
+  CreatedAt   DateTime @default(now())
+  UpdatedAt   DateTime @updatedAt
+
+  Course  sched_Courses? @relation(fields: [CourseId], references: [CourseId])
+  Classes sched_Classes[]
+
+  @@index([CourseId])
+}
+
+model sched_Rooms {
+  RoomId    Int      @id @default(autoincrement())
+  RoomCode  String   @unique @db.VarChar(30)
+  RoomName  String   @db.VarChar(100)
+  Building  String?  @db.VarChar(100)
+  Capacity  Int      @default(40)
+  IsActive  Boolean  @default(true)
+  CreatedAt DateTime @default(now())
+  UpdatedAt DateTime @updatedAt
+
+  Schedules sched_Schedules[]
+}
+
+// ─────────────────────────────────────────
+// ACADEMIC TERMS (First-Class Entities)
+// ─────────────────────────────────────────
+
+model sched_SchoolYears {
+  SchoolYearId Int      @id @default(autoincrement())
+  YearLabel    String   @unique @db.VarChar(20) // e.g. "2025-2026"
+  StartDate    DateTime @db.Date
+  EndDate      DateTime @db.Date
+  IsActive     Boolean  @default(false)
+  CreatedAt    DateTime @default(now())
+  UpdatedAt    DateTime @updatedAt
+
+  Semesters sched_Semesters[]
+}
+
+model sched_Semesters {
+  SemesterId   Int      @id @default(autoincrement())
+  SchoolYearId Int
+  SemesterName String   @db.VarChar(50) // "First Semester" | "Second Semester" | "Summer"
+  StartDate    DateTime @db.Date
+  EndDate      DateTime @db.Date
+  IsActive     Boolean  @default(false)
+  CreatedAt    DateTime @default(now())
+  UpdatedAt    DateTime @updatedAt
+
+  SchoolYear sched_SchoolYears @relation(fields: [SchoolYearId], references: [SchoolYearId])
+  Classes    sched_Classes[]
+
+  @@index([SchoolYearId])
+}
+
+model sched_Classes {
+  ClassId     Int       @id @default(autoincrement())
+  SubjectId   Int
+  SemesterId  Int
+  SectionCode String    @db.VarChar(30)
+  StudySession String?   @db.VarChar(10) // Renamed for Session (Day/Night)
+  MaxStudents Int       @default(40)
+  IsActive    Boolean   @default(true)
+  CreatedAt   DateTime  @default(now())
+  UpdatedAt   DateTime  @updatedAt
+  DeletedAt   DateTime?
+
+  Subject          sched_Subjects         @relation(fields: [SubjectId], references: [SubjectId])
+  Semester         sched_Semesters        @relation(fields: [SemesterId], references: [SemesterId])
+  Schedules        sched_Schedules[]
+  Enrollments      sched_Enrollments[]
+  ClassAssignments sched_ClassAssignments[]
+
+  @@unique([SubjectId, SectionCode, SemesterId])
+  @@index([SemesterId])
+  @@index([SubjectId])
+}
+
+model sched_Schedules {
+  ScheduleId    Int       @id @default(autoincrement())
+  ClassId       Int
+  RoomId        Int
+  DayOfWeek     Int       // 0=Sunday … 6=Saturday
+  StartTime     String    @db.VarChar(5) // "08:00" HH:MM 24h
+  EndTime       String    @db.VarChar(5) // "09:30" HH:MM 24h
+  EffectiveFrom DateTime  @db.Date
+  EffectiveTo   DateTime? @db.Date
+  IsActive      Boolean   @default(true)
+  CreatedAt     DateTime  @default(now())
+  UpdatedAt     DateTime  @updatedAt
+
+  Class              sched_Classes            @relation(fields: [ClassId], references: [ClassId])
+  Room               sched_Rooms              @relation(fields: [RoomId], references: [RoomId])
+  AttendanceSessions sched_AttendanceSessions[]
+
+  @@index([ClassId, DayOfWeek])
+  @@index([RoomId, DayOfWeek])
+}
+
+model sched_Enrollments {
+  EnrollmentId Int       @id @default(autoincrement())
+  StudentId    Int
+  ClassId      Int
+  EnrolledAt   DateTime  @default(now())
+  DroppedAt    DateTime?
+  Status       String    @default("ACTIVE") @db.VarChar(20) // ACTIVE | DROPPED | COMPLETED
+
+  Student sched_Students @relation(fields: [StudentId], references: [StudentId])
+  Class   sched_Classes  @relation(fields: [ClassId], references: [ClassId])
+
+  @@unique([StudentId, ClassId])
+  @@index([ClassId])
+  @@index([StudentId])
+}
+
+model sched_ClassAssignments {
+  AssignmentId Int       @id @default(autoincrement())
+  InstructorId Int
+  ClassId      Int
+  AssignedAt   DateTime  @default(now())
+  RemovedAt    DateTime?
+  IsPrimary    Boolean   @default(true)
+
+  Instructor sched_Instructors @relation(fields: [InstructorId], references: [InstructorId])
+  Class      sched_Classes     @relation(fields: [ClassId], references: [ClassId])
+
+  @@unique([InstructorId, ClassId])
+  @@index([ClassId])
+}
+
+// ─────────────────────────────────────────
+// ATTENDANCE
+// ─────────────────────────────────────────
+
+model sched_AttendanceSessions {
+  SessionId   Int       @id @default(autoincrement())
+  ScheduleId  Int
+  SessionDate DateTime  @db.Date
+  OpenedAt    DateTime?
+  ClosedAt    DateTime?
+  AutoCloseAt DateTime?
+  QrCodeToken String?   @unique @db.VarChar(512) // signed JWT token
+  QrExpiresAt DateTime?
+  Status      String    @default("PENDING") @db.VarChar(20) // PENDING | OPEN | CLOSED | CANCELLED
+  Method      String    @default("BUTTON") @db.VarChar(20) // BUTTON | QR | BOTH
+  CreatedAt   DateTime  @default(now())
+  UpdatedAt   DateTime  @updatedAt
+
+  Schedule          sched_Schedules          @relation(fields: [ScheduleId], references: [ScheduleId])
+  AttendanceRecords sched_AttendanceRecords[]
+
+  @@index([ScheduleId, SessionDate])
+  @@index([Status])
+}
+
+model sched_AttendanceRecords {
+  AttendanceRecordId Int      @id @default(autoincrement())
+  SessionId          Int
+  StudentId          Int
+  Status             String   @db.VarChar(20) // PRESENT | LATE | ABSENT | EXCUSED
+  MarkedAt           DateTime @default(now())
+  MarkedByUserId     Int?
+  Remarks            String?  @db.Text
+  IsOverridden       Boolean  @default(false)
+  OverriddenAt       DateTime?
+  OverriddenByUserId Int?
+  CreatedAt          DateTime @default(now())
+  UpdatedAt          DateTime @updatedAt
+
+  Session sched_AttendanceSessions @relation(fields: [SessionId], references: [SessionId])
+  Student sched_Students           @relation(fields: [StudentId], references: [StudentId])
+
+  @@unique([SessionId, StudentId]) // immutable: one record per student per session
+  @@index([StudentId])
+  @@index([SessionId])
+}
+
+// ─────────────────────────────────────────
+// AUDIT & SYSTEM
+// ─────────────────────────────────────────
+
+model sched_AuditLogs {
+  AuditLogId  Int      @id @default(autoincrement())
+  UserId      Int?
+  Action      String   @db.VarChar(100) // e.g. USER_CREATED, ATTENDANCE_OVERRIDDEN
+  EntityType  String   @db.VarChar(100) // e.g. sched_Users, sched_AttendanceRecords
+  EntityId    String?  @db.VarChar(50)
+  OldValues   Json?
+  NewValues   Json?
+  IpAddress   String?  @db.VarChar(45)
+  UserAgent   String?  @db.VarChar(500)
+  CreatedAt   DateTime @default(now())
+
+  User sched_Users? @relation(fields: [UserId], references: [UserId])
+
+  @@index([UserId])
+  @@index([EntityType, EntityId])
+  @@index([CreatedAt])
+  @@index([Action])
+}
+
+model sched_SystemSettings {
+  SettingId       Int      @id @default(autoincrement())
+  SettingKey      String   @unique @db.VarChar(100)
+  SettingValue    String   @db.Text
+  Description     String?  @db.VarChar(255)
+  UpdatedAt       DateTime @updatedAt
+  UpdatedByUserId Int?
+}
