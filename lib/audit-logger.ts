@@ -49,7 +49,7 @@ interface AuditLogParams {
  */
 export async function auditLog(params: AuditLogParams): Promise<void> {
   try {
-    await prisma.sched_AuditLogs.create({
+    await prisma.t_AuditLog.create({
       data: {
         UserId: params.userId ?? null,
         Action: params.action,

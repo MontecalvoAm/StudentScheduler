@@ -45,8 +45,8 @@ export async function GET(req: NextRequest) {
     };
 
     const [total, sessions] = await prisma.$transaction([
-      prisma.sched_AttendanceSessions.count({ where }),
-      prisma.sched_AttendanceSessions.findMany({
+      prisma.t_AttendanceSession.count({ where }),
+      prisma.t_AttendanceSession.findMany({
         where,
         skip,
         take: limit,
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     const { ScheduleId, SessionDate, Method, AutoCloseMinutes } = parsed.data;
 
     // Verify schedule exists and belongs to requesting instructor
-    const schedule = await prisma.sched_Schedules.findFirst({
+    const schedule = await prisma.mT_Schedule.findFirst({
       where: {
         ScheduleId,
         IsActive: true,
@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check for duplicate session on same date
-    const existing = await prisma.sched_AttendanceSessions.findFirst({
+    const existing = await prisma.t_AttendanceSession.findFirst({
       where: {
         ScheduleId,
         SessionDate: new Date(SessionDate),
@@ -150,13 +150,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate QR token if method requires it
-    let qrCodeToken: string | null = null;
     let qrExpiresAt: Date | null = null;
     let qrCodeDataUrl: string | null = null;
 
     if (Method === "QR" || Method === "BOTH") {
       const expiryMinutes = parseInt(process.env.QR_TOKEN_EXPIRY_MINUTES ?? "5", 10);
-      qrCodeToken = await signQrToken(0); // temp — will update with real sessionId
       qrExpiresAt = new Date(Date.now() + expiryMinutes * 60000);
     }
 
@@ -164,7 +162,7 @@ export async function POST(req: NextRequest) {
       ? new Date(Date.now() + AutoCloseMinutes * 60000)
       : null;
 
-    const session = await prisma.sched_AttendanceSessions.create({
+    const session = await prisma.t_AttendanceSession.create({
       data: {
         ScheduleId,
         SessionDate: new Date(SessionDate),
@@ -191,7 +189,7 @@ export async function POST(req: NextRequest) {
       const expiryMinutes = parseInt(process.env.QR_TOKEN_EXPIRY_MINUTES ?? "5", 10);
       qrExpiresAt = new Date(Date.now() + expiryMinutes * 60000);
 
-      await prisma.sched_AttendanceSessions.update({
+      await prisma.t_AttendanceSession.update({
         where: { SessionId: session.SessionId },
         data: { QrCodeToken: realQrToken, QrExpiresAt: qrExpiresAt },
       });
@@ -208,7 +206,7 @@ export async function POST(req: NextRequest) {
     await auditLog({
       userId: user.userId,
       action: "ATTENDANCE_SESSION_OPENED",
-      entityType: "sched_AttendanceSessions",
+      entityType: "T_AttendanceSession",
       entityId: session.SessionId,
       newValues: { ScheduleId, SessionDate, Method },
       ipAddress: ip,

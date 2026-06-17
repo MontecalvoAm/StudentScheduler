@@ -19,7 +19,7 @@ export async function GET(
       );
     }
 
-    const session = await prisma.sched_AttendanceSessions.findFirst({
+    const session = await prisma.t_AttendanceSession.findFirst({
       where: {
         SessionId: sId,
         ...(user.role === ROLES.INSTRUCTOR && {

@@ -52,8 +52,8 @@ export async function GET(req: NextRequest) {
     };
 
     const [total, users, totalUserCount, roleCount, activeCount] = [
-      await prisma.sched_Users.count({ where }),
-      await prisma.sched_Users.findMany({
+      await prisma.m_User.count({ where }),
+      await prisma.m_User.findMany({
         where,
         skip,
         take: limit,
@@ -84,9 +84,9 @@ export async function GET(req: NextRequest) {
           },
         },
       }),
-      await prisma.sched_Users.count({ where: { DeletedAt: null } }),
-      await prisma.sched_Roles.count(),
-      await prisma.sched_Users.count({ where: { DeletedAt: null, IsActive: true } }),
+      await prisma.m_User.count({ where: { DeletedAt: null } }),
+      await prisma.m_Role.count(),
+      await prisma.m_User.count({ where: { DeletedAt: null, IsActive: true } }),
     ];
 
     return applySecurityHeaders(
@@ -138,13 +138,13 @@ export async function POST(req: NextRequest) {
 
     // Generate secure temp password
     const tempPassword = crypto.randomBytes(8).toString("base64url");
-    const { valid, errors } = validatePasswordStrength(tempPassword + "A1!");
+    const { valid } = validatePasswordStrength(tempPassword + "A1!");
     const finalPassword = valid ? tempPassword + "A1!" : "Temp@" + crypto.randomBytes(6).toString("hex") + "1!";
 
     const passwordHash = await hashPassword(finalPassword);
 
     // Verify role exists
-    const role = await prisma.sched_Roles.findUnique({
+    const role = await prisma.m_Role.findUnique({
       where: { RoleId: data.RoleId },
     });
     if (!role) {
@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check email uniqueness
-    const existing = await prisma.sched_Users.findFirst({
+    const existing = await prisma.m_User.findFirst({
       where: { Email: data.Email, DeletedAt: null },
     });
     if (existing) {
@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
 
     // Create user + profile in a transaction
     const newUser = await prisma.$transaction(async (tx) => {
-      const created = await tx.sched_Users.create({
+      const created = await tx.m_User.create({
         data: {
           Email: data.Email,
           PasswordHash: passwordHash,
@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
 
       // Create role-specific profile
       if (role.RoleName === ROLES.STUDENT && data.StudentNumber) {
-        await tx.sched_Students.create({
+        await tx.m_Student.create({
           data: {
             UserId: created.UserId,
             StudentNumber: data.StudentNumber,
@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
           },
         });
       } else if (role.RoleName === ROLES.INSTRUCTOR && data.EmployeeNumber) {
-        await tx.sched_Instructors.create({
+        await tx.m_Instructor.create({
           data: {
             UserId: created.UserId,
             EmployeeNumber: data.EmployeeNumber,
@@ -215,7 +215,7 @@ export async function POST(req: NextRequest) {
     await auditLog({
       userId: adminUser.userId,
       action: "USER_CREATED",
-      entityType: "sched_Users",
+      entityType: "M_User",
       entityId: newUser.UserId,
       newValues: sanitizeForAudit({
         Email: newUser.Email,

@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       .update(refreshToken)
       .digest("hex");
 
-    const storedToken = await prisma.sched_RefreshTokens.findUnique({
+    const storedToken = await prisma.t_RefreshToken.findUnique({
       where: { TokenHash: tokenHash },
       include: { User: { include: { Role: true } } },
     });
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
 
     // TOKEN ROTATION: revoke old token, issue new pair
-    await prisma.sched_RefreshTokens.update({
+    await prisma.t_RefreshToken.update({
       where: { TokenId: storedToken.TokenId },
       data: { IsRevoked: true },
     });
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
       .update(newRefreshTokenRaw)
       .digest("hex");
 
-    const newTokenRecord = await prisma.sched_RefreshTokens.create({
+    const newTokenRecord = await prisma.t_RefreshToken.create({
       data: {
         UserId: user.UserId,
         TokenHash: newRefreshTokenHash,

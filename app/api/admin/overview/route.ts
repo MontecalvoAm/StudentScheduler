@@ -18,16 +18,16 @@ export async function GET(req: NextRequest) {
       todaySchedules,
       recentRegistrations,
     ] = [
-      await prisma.sched_Students.count({ where: { DeletedAt: null } }),
-      await prisma.sched_Instructors.count({ where: { DeletedAt: null } }),
-      await prisma.sched_Users.count({
+      await prisma.m_Student.count({ where: { DeletedAt: null } }),
+      await prisma.m_Instructor.count({ where: { DeletedAt: null } }),
+      await prisma.m_User.count({
         where: { Role: { RoleName: "SUPER_ADMIN" }, DeletedAt: null },
       }),
-      await prisma.sched_Classes.count({ where: { DeletedAt: null } }),
-      await prisma.sched_Rooms.count({ where: { IsActive: true } }),
-      await prisma.sched_Subjects.count({ where: { IsActive: true } }),
+      await prisma.mT_Class.count({ where: { DeletedAt: null } }),
+      await prisma.m_Room.count({ where: { IsActive: true } }),
+      await prisma.m_Subject.count({ where: { IsActive: true } }),
       // Today's Schedules (matching current DayOfWeek)
-      await prisma.sched_Schedules.findMany({
+      await prisma.mT_Schedule.findMany({
         where: { 
           DayOfWeek: new Date().getDay(),
           IsActive: true
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         orderBy: { StartTime: "asc" }
       }),
       // Recent Registrations
-      await prisma.sched_Users.findMany({
+      await prisma.m_User.findMany({
         where: { DeletedAt: null },
         take: 5,
         orderBy: { CreatedAt: "desc" },

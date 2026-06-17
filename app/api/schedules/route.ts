@@ -8,7 +8,7 @@ import { applySecurityHeaders } from "@/lib/security/headers";
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ROLES.SUPER_ADMIN);
-    const schedules = await prisma.sched_Schedules.findMany({
+    const schedules = await prisma.mT_Schedule.findMany({
       where: { IsActive: true },
       include: {
         Class: {
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     const { ClassId, RoomId, DayOfWeek, StartTime, EndTime, EffectiveFrom, EffectiveTo } = parsed.data;
 
     // 1. Room Overlap Check
-    const roomOverlap = await prisma.sched_Schedules.findFirst({
+    const roomOverlap = await prisma.mT_Schedule.findFirst({
       where: {
         RoomId,
         DayOfWeek,
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     // 2. Instructor Overlap Check
     // Get the instructors assigned to the current class
-    const assignments = await prisma.sched_ClassAssignments.findMany({
+    const assignments = await prisma.mT_ClassAssignment.findMany({
       where: { ClassId, RemovedAt: null },
       select: { InstructorId: true },
     });
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
     const instructorIds = assignments.map((a) => a.InstructorId);
 
     if (instructorIds.length > 0) {
-      const instructorOverlap = await prisma.sched_Schedules.findFirst({
+      const instructorOverlap = await prisma.mT_Schedule.findFirst({
         where: {
           DayOfWeek,
           IsActive: true,
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Create Schedule
-    const schedule = await prisma.sched_Schedules.create({
+    const schedule = await prisma.mT_Schedule.create({
       data: {
         ClassId,
         RoomId,
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
     await auditLog({
       userId: user.userId,
       action: "SCHEDULE_CREATED",
-      entityType: "sched_Schedules",
+      entityType: "MT_Schedule",
       entityId: schedule.ScheduleId.toString(),
       newValues: { ClassId, RoomId, DayOfWeek, StartTime, EndTime },
       ipAddress: ip,

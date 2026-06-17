@@ -8,7 +8,7 @@ import { applySecurityHeaders } from "@/lib/security/headers";
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ROLES.SUPER_ADMIN);
-    const classes = await prisma.sched_Classes.findMany({
+    const classes = await prisma.mT_Class.findMany({
       where: { DeletedAt: null },
       include: {
         Subject: true,
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     const { SubjectId, SemesterId, SectionCode, MaxStudents, StudySession } = parsed.data;
 
     // Check duplicate
-    const existing = await prisma.sched_Classes.findFirst({
+    const existing = await prisma.mT_Class.findFirst({
       where: {
         SubjectId,
         SemesterId,
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const newClass = await prisma.sched_Classes.create({
+    const newClass = await prisma.mT_Class.create({
       data: {
         SubjectId,
         SemesterId,
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     await auditLog({
       userId: user.userId,
       action: "CLASS_CREATED",
-      entityType: "sched_Classes",
+      entityType: "MT_Class",
       entityId: newClass.ClassId.toString(),
       newValues: { SubjectId, SemesterId, SectionCode, MaxStudents, StudySession },
       ipAddress: ip,

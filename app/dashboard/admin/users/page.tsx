@@ -34,6 +34,7 @@ interface UserRecord {
   };
   Student?: {
     StudentNumber: string;
+    CourseId?: number;
     YearLevel?: number;
     Section?: string;
     StudySession?: string;

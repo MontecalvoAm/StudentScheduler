@@ -9,12 +9,12 @@ export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ROLES.SUPER_ADMIN);
     const [subjects, totalSubjects, activeSubjects, unitsAgg] = [
-      await prisma.sched_Subjects.findMany({
+      await prisma.m_Subject.findMany({
         orderBy: { SubjectCode: "asc" },
       }),
-      await prisma.sched_Subjects.count(),
-      await prisma.sched_Subjects.count({ where: { IsActive: true } }),
-      await prisma.sched_Subjects.aggregate({
+      await prisma.m_Subject.count(),
+      await prisma.m_Subject.count({ where: { IsActive: true } }),
+      await prisma.m_Subject.aggregate({
         _sum: { Units: true }
       })
     ];
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     const { SubjectCode, SubjectName, Units, Description, CourseId } = parsed.data;
 
-    const existing = await prisma.sched_Subjects.findUnique({
+    const existing = await prisma.m_Subject.findUnique({
       where: { SubjectCode },
     });
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const subject = await prisma.sched_Subjects.create({
+    const subject = await prisma.m_Subject.create({
       data: {
         SubjectCode,
         SubjectName,
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     await auditLog({
       userId: user.userId,
       action: "SUBJECT_CREATED",
-      entityType: "sched_Subjects",
+      entityType: "M_Subject",
       entityId: subject.SubjectId.toString(),
       newValues: { SubjectCode, SubjectName, Units },
       ipAddress: ip,

@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
         .update(refreshToken)
         .digest("hex");
 
-      await prisma.sched_RefreshTokens.updateMany({
+      await prisma.t_RefreshToken.updateMany({
         where: { TokenHash: tokenHash },
         data: { IsRevoked: true },
       });
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
       await auditLog({
         userId,
         action: "USER_LOGOUT",
-        entityType: "sched_Users",
+        entityType: "M_User",
         entityId: userId,
         ipAddress: ip,
         userAgent,

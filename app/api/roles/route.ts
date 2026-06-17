@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ROLES.SUPER_ADMIN);
 
-    const roles = await prisma.sched_Roles.findMany({
+    const roles = await prisma.m_Role.findMany({
       include: {
         _count: {
           select: { Users: true }

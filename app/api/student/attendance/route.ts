@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await requireRole(req, ROLES.STUDENT);
 
-    const student = await prisma.sched_Students.findUnique({
+    const student = await prisma.m_Student.findUnique({
       where: { UserId: user.userId },
     });
 
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const records = await prisma.sched_AttendanceRecords.findMany({
+    const records = await prisma.t_AttendanceRecord.findMany({
       where: { StudentId: student.StudentId },
       include: {
         Session: {

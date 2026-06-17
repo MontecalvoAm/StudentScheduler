@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await requireRole(req, ROLES.STUDENT);
 
-    const student = await prisma.sched_Students.findUnique({
+    const student = await prisma.m_Student.findUnique({
       where: { UserId: user.userId },
       include: {
         Enrollments: {
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
     const classIds = student.Enrollments.map((e) => e.ClassId);
 
-    const schedules = await prisma.sched_Schedules.findMany({
+    const schedules = await prisma.mT_Schedule.findMany({
       where: {
         ClassId: { in: classIds },
         IsActive: true,

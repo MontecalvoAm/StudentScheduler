@@ -8,10 +8,25 @@ import { applySecurityHeaders } from "@/lib/security/headers";
 export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ROLES.SUPER_ADMIN);
-    const rooms = await prisma.sched_Rooms.findMany({
-      orderBy: { RoomCode: "asc" },
-    });
-    return applySecurityHeaders(NextResponse.json({ success: true, rooms }));
+    const [rooms, totalRooms, activeRooms, capacityAgg, buildings] = await Promise.all([
+      prisma.m_Room.findMany({
+        orderBy: { RoomCode: "asc" },
+      }),
+      prisma.m_Room.count(),
+      prisma.m_Room.count({ where: { IsActive: true } }),
+      prisma.m_Room.aggregate({ _sum: { Capacity: true } }),
+      prisma.m_Room.groupBy({ by: ["Building"], where: { Building: { not: null } } }),
+    ]);
+    return applySecurityHeaders(NextResponse.json({
+      success: true,
+      rooms,
+      stats: {
+        totalRooms,
+        activeRooms,
+        totalCapacity: capacityAgg._sum.Capacity ?? 0,
+        totalBuildings: buildings.length,
+      },
+    }));
   } catch (error) {
     if (error instanceof AuthError) {
       return applySecurityHeaders(
@@ -38,7 +53,7 @@ export async function POST(req: NextRequest) {
 
     const { RoomCode, RoomName, Building, Capacity } = parsed.data;
 
-    const existing = await prisma.sched_Rooms.findUnique({
+    const existing = await prisma.m_Room.findUnique({
       where: { RoomCode },
     });
 
@@ -48,7 +63,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const room = await prisma.sched_Rooms.create({
+    const room = await prisma.m_Room.create({
       data: {
         RoomCode,
         RoomName,
@@ -61,7 +76,7 @@ export async function POST(req: NextRequest) {
     await auditLog({
       userId: user.userId,
       action: "ROOM_CREATED",
-      entityType: "sched_Rooms",
+      entityType: "M_Room",
       entityId: room.RoomId.toString(),
       newValues: { RoomCode, RoomName, Capacity },
       ipAddress: ip,

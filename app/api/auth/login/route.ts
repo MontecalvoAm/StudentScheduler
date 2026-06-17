@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     const userAgent = req.headers.get("user-agent") ?? null;
 
     // 3. Look up user (include soft-deleted check)
-    const user = await prisma.sched_Users.findFirst({
+    const user = await prisma.m_User.findFirst({
       where: { Email, DeletedAt: null },
       include: { Role: true },
     });
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
         await auditLog({
           userId: user.UserId,
           action: "USER_LOGIN_FAILED",
-          entityType: "sched_Users",
+          entityType: "M_User",
           entityId: user.UserId,
           newValues: { reason: "ACCOUNT_LOCKED" },
           ipAddress: ip,
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
         );
       } else {
         // Lock period expired — reset
-        await prisma.sched_Users.update({
+        await prisma.m_User.update({
           where: { UserId: user.UserId },
           data: { IsLocked: false, FailedLoginCount: 0, LockedUntil: null },
         });
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
       const newFailCount = user.FailedLoginCount + 1;
       const shouldLock = newFailCount >= MAX_FAILED_ATTEMPTS;
 
-      await prisma.sched_Users.update({
+      await prisma.m_User.update({
         where: { UserId: user.UserId },
         data: {
           FailedLoginCount: newFailCount,
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
       await auditLog({
         userId: user.UserId,
         action: "USER_LOGIN_FAILED",
-        entityType: "sched_Users",
+        entityType: "M_User",
         entityId: user.UserId,
         newValues: { failedAttempts: newFailCount, locked: shouldLock },
         ipAddress: ip,
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
       .update(refreshTokenRaw)
       .digest("hex");
 
-    const tokenRecord = await prisma.sched_RefreshTokens.create({
+    const tokenRecord = await prisma.t_RefreshToken.create({
       data: {
         UserId: user.UserId,
         TokenHash: refreshTokenHash,
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
     });
 
     // 9. Reset failed login count + update last login
-    await prisma.sched_Users.update({
+    await prisma.m_User.update({
       where: { UserId: user.UserId },
       data: {
         FailedLoginCount: 0,
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
     await auditLog({
       userId: user.UserId,
       action: "USER_LOGIN",
-      entityType: "sched_Users",
+      entityType: "M_User",
       entityId: user.UserId,
       ipAddress: ip,
       userAgent,

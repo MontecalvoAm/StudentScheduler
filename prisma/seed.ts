@@ -18,7 +18,7 @@ async function main() {
 
   const roles: Record<string, number> = {};
   for (const role of rolesData) {
-    const r = await prisma.sched_Roles.upsert({
+    const r = await prisma.m_Role.upsert({
       where: { RoleName: role.RoleName },
       update: { Description: role.Description },
       create: role,
@@ -27,59 +27,58 @@ async function main() {
     console.log(`  ✅ Role: ${role.RoleName} (ID: ${r.RoleId})`);
   }
 
-  // ─── Super Admin User ────────────────────────────────────────────────────────
-  const adminEmail = "admin@scheduletracker.app";
-  const adminPassword = "Admin@123456!"; // CHANGE ON FIRST LOGIN
-  const adminHash = await bcrypt.hash(adminPassword, 12);
+  // ─── Default Super Admin User ────────────────────────────────────────────────
+  const adminEmail    = "aljon.montecalvo08@gmail.com";
+  const adminPassword = "@Aljon123";
+  const adminHash     = await bcrypt.hash(adminPassword, 12);
 
-  const admin = await prisma.sched_Users.upsert({
+  const admin = await prisma.m_User.upsert({
     where: { Email: adminEmail },
     update: {},
     create: {
-      Email: adminEmail,
+      Email:      adminEmail,
       PasswordHash: adminHash,
-      FirstName: "System",
-      LastName: "Administrator",
-      RoleId: roles["SUPER_ADMIN"],
-      IsActive: true,
-      PasswordChangedAt: null, // Force password change
+      FirstName:  "Aljon",
+      LastName:   "Montecalvo",
+      MiddleName: "Bajenting",
+      RoleId:     roles["SUPER_ADMIN"],
+      IsActive:   true,
     },
   });
   console.log(`  ✅ Super Admin: ${adminEmail} (ID: ${admin.UserId})`);
-  console.log(`     Temp Password: ${adminPassword} ← CHANGE IMMEDIATELY`);
 
   // ─── System Settings ─────────────────────────────────────────────────────────
   const settings = [
     {
-      SettingKey: "attendance.late_threshold_minutes",
+      SettingKey:   "attendance.late_threshold_minutes",
       SettingValue: "15",
-      Description: "Minutes after schedule start to consider a student late",
+      Description:  "Minutes after schedule start to consider a student late",
     },
     {
-      SettingKey: "attendance.low_percentage_threshold",
+      SettingKey:   "attendance.low_percentage_threshold",
       SettingValue: "75",
-      Description: "Attendance percentage below which a warning is sent",
+      Description:  "Attendance percentage below which a warning is sent",
     },
     {
-      SettingKey: "attendance.qr_expiry_minutes",
+      SettingKey:   "attendance.qr_expiry_minutes",
       SettingValue: "5",
-      Description: "QR code token expiry in minutes",
+      Description:  "QR code token expiry in minutes",
     },
     {
-      SettingKey: "account.max_failed_logins",
+      SettingKey:   "account.max_failed_logins",
       SettingValue: "5",
-      Description: "Maximum failed login attempts before account lockout",
+      Description:  "Maximum failed login attempts before account lockout",
     },
     {
-      SettingKey: "account.lockout_minutes",
+      SettingKey:   "account.lockout_minutes",
       SettingValue: "30",
-      Description: "Account lockout duration in minutes after max failed attempts",
+      Description:  "Account lockout duration in minutes after max failed attempts",
     },
   ];
 
   for (const setting of settings) {
-    await prisma.sched_SystemSettings.upsert({
-      where: { SettingKey: setting.SettingKey },
+    await prisma.m_SystemSetting.upsert({
+      where:  { SettingKey: setting.SettingKey },
       update: { SettingValue: setting.SettingValue },
       create: setting,
     });
@@ -87,35 +86,32 @@ async function main() {
   }
 
   // ─── Sample School Year & Semester ──────────────────────────────────────────
-  const schoolYear = await prisma.sched_SchoolYears.upsert({
-    where: { YearLabel: "2025-2026" },
+  const schoolYear = await prisma.m_SchoolYear.upsert({
+    where:  { YearLabel: "2025-2026" },
     update: {},
     create: {
       YearLabel: "2025-2026",
       StartDate: new Date("2025-08-01"),
-      EndDate: new Date("2026-05-31"),
-      IsActive: true,
+      EndDate:   new Date("2026-05-31"),
+      IsActive:  true,
     },
   });
   console.log(`  ✅ School Year: 2025-2026 (ID: ${schoolYear.SchoolYearId})`);
 
-  const semester1 = await prisma.sched_Semesters.upsert({
-    where: { SemesterId: 1 },
+  const semester1 = await prisma.m_Semester.upsert({
+    where:  { SemesterId: 1 },
     update: {},
     create: {
       SchoolYearId: schoolYear.SchoolYearId,
       SemesterName: "First Semester",
-      StartDate: new Date("2025-08-12"),
-      EndDate: new Date("2025-12-15"),
-      IsActive: true,
+      StartDate:    new Date("2025-08-12"),
+      EndDate:      new Date("2025-12-15"),
+      IsActive:     true,
     },
   });
-  console.log(
-    `  ✅ Semester: First Semester (ID: ${semester1.SemesterId})`
-  );
+  console.log(`  ✅ Semester: First Semester (ID: ${semester1.SemesterId})`);
 
   console.log("\n✅ Database seeded successfully!");
-  console.log("\n⚠️  IMPORTANT: Change the admin password at first login!");
 }
 
 main()

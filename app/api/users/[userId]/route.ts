@@ -35,7 +35,7 @@ export async function PATCH(
     const { Email, FirstName, LastName, RoleId, IsActive, IsLocked, CourseId, YearLevel, Section, StudySession, Department } = parsed.data;
 
     // Fetch existing user to check and log changes
-    const existing = await prisma.sched_Users.findUnique({
+    const existing = await prisma.m_User.findUnique({
       where: { UserId: targetUserId },
       include: { Role: true }
     });
@@ -58,7 +58,7 @@ export async function PATCH(
 
     // Update user and profile in a transaction
     const updated = await prisma.$transaction(async (tx) => {
-      const u = await tx.sched_Users.update({
+      const u = await tx.m_User.update({
         where: { UserId: targetUserId },
         data: {
           ...(Email && { Email }),
@@ -76,7 +76,7 @@ export async function PATCH(
 
       // Handle Profile Updates
       if (existing.Role.RoleName === ROLES.STUDENT) {
-        await tx.sched_Students.update({
+        await tx.m_Student.update({
           where: { UserId: targetUserId },
           data: {
             ...(CourseId !== undefined && { CourseId }),
@@ -86,7 +86,7 @@ export async function PATCH(
           }
         });
       } else if (existing.Role.RoleName === ROLES.INSTRUCTOR) {
-        await tx.sched_Instructors.update({
+        await tx.m_Instructor.update({
           where: { UserId: targetUserId },
           data: {
             ...(Department !== undefined && { Department }),
@@ -101,7 +101,7 @@ export async function PATCH(
     await auditLog({
       userId: user.userId,
       action: "USER_UPDATED",
-      entityType: "sched_Users",
+      entityType: "M_User",
       entityId: targetUserId.toString(),
       oldValues: {
         Email: existing.Email,
@@ -155,7 +155,7 @@ export async function DELETE(
       );
     }
 
-    const existing = await prisma.sched_Users.findUnique({
+    const existing = await prisma.m_User.findUnique({
       where: { UserId: targetUserId, DeletedAt: null },
     });
 
@@ -165,7 +165,7 @@ export async function DELETE(
       );
     }
 
-    await prisma.sched_Users.update({
+    await prisma.m_User.update({
       where: { UserId: targetUserId },
       data: { DeletedAt: new Date(), IsActive: false },
     });
@@ -174,7 +174,7 @@ export async function DELETE(
     await auditLog({
       userId: user.userId,
       action: "USER_DELETED",
-      entityType: "sched_Users",
+      entityType: "M_User",
       entityId: targetUserId.toString(),
       ipAddress: ip,
     });

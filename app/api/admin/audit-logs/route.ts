@@ -25,8 +25,8 @@ export async function GET(req: NextRequest) {
       : {};
 
     const [total, logs] = await prisma.$transaction([
-      prisma.sched_AuditLogs.count({ where }),
-      prisma.sched_AuditLogs.findMany({
+      prisma.t_AuditLog.count({ where }),
+      prisma.t_AuditLog.findMany({
         where,
         skip,
         take: limit,

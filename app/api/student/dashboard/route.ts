@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
     const user = await requireRole(req, ROLES.STUDENT);
 
     // Get student record
-    const student = await prisma.sched_Students.findUnique({
+    const student = await prisma.m_Student.findUnique({
       where: { UserId: user.userId },
       include: {
         Enrollments: {
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     const today = new Date();
     const dayOfWeek = today.getDay(); // 0=Sunday...6=Saturday
 
-    const schedules = await prisma.sched_Schedules.findMany({
+    const schedules = await prisma.mT_Schedule.findMany({
       where: {
         ClassId: { in: classIds },
         DayOfWeek: dayOfWeek,
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     });
 
     // 2. Get active attendance sessions for today
-    const activeSessions = await prisma.sched_AttendanceSessions.findMany({
+    const activeSessions = await prisma.t_AttendanceSession.findMany({
       where: {
         Schedule: { ClassId: { in: classIds } },
         Status: "OPEN",
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
     });
 
     // 3. Get overall attendance stats
-    const records = await prisma.sched_AttendanceRecords.findMany({
+    const records = await prisma.t_AttendanceRecord.findMany({
       where: { StudentId: student.StudentId },
       select: { Status: true },
     });

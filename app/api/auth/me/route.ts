@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const user = await prisma.sched_Users.findUnique({
+    const user = await prisma.m_User.findUnique({
       where: { UserId: session.userId },
       include: {
         Role: true,

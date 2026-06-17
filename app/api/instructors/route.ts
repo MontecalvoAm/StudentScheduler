@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ROLES.SUPER_ADMIN);
 
-    const instructors = await prisma.sched_Instructors.findMany({
+    const instructors = await prisma.m_Instructor.findMany({
       where: { DeletedAt: null },
       include: {
         User: {

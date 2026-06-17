@@ -32,7 +32,7 @@ export async function PATCH(
     }
 
     // Verify session exists and belongs to instructor
-    const session = await prisma.sched_AttendanceSessions.findFirst({
+    const session = await prisma.t_AttendanceSession.findFirst({
       where: {
         SessionId: sId,
         ...(user.role === ROLES.INSTRUCTOR && {
@@ -56,7 +56,7 @@ export async function PATCH(
       );
     }
 
-    const updated = await prisma.sched_AttendanceSessions.update({
+    const updated = await prisma.t_AttendanceSession.update({
       where: { SessionId: sId },
       data: {
         Status: status,
@@ -69,7 +69,7 @@ export async function PATCH(
     await auditLog({
       userId: user.userId,
       action: status === "CLOSED" ? "ATTENDANCE_SESSION_CLOSED" : "ATTENDANCE_SESSION_CANCELLED",
-      entityType: "sched_AttendanceSessions",
+      entityType: "T_AttendanceSession",
       entityId: updated.SessionId,
       newValues: { Status: status },
       ipAddress: ip,

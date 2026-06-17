@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ROLES.SUPER_ADMIN);
 
-    const semesters = await prisma.sched_Semesters.findMany({
+    const semesters = await prisma.m_Semester.findMany({
       where: { IsActive: true },
       include: { SchoolYear: true },
       orderBy: { SemesterName: "asc" },

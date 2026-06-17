@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     await requireRole(req, ROLES.SUPER_ADMIN);
 
-    const courses = await prisma.sched_Courses.findMany({
+    const courses = await prisma.m_Course.findMany({
       where: { IsActive: true },
       select: { CourseId: true, CourseCode: true, CourseName: true },
     });

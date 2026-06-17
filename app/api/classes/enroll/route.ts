@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     const { StudentId, ClassId } = parsed.data;
 
     // Verify student exists
-    const student = await prisma.sched_Students.findUnique({
+    const student = await prisma.m_Student.findUnique({
       where: { StudentId },
     });
 
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify class exists and is active
-    const targetClass = await prisma.sched_Classes.findUnique({
+    const targetClass = await prisma.mT_Class.findUnique({
       where: { ClassId, DeletedAt: null },
       include: {
         Enrollments: { where: { Status: "ACTIVE" } },
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Enroll student
-    const enrollment = await prisma.sched_Enrollments.upsert({
+    const enrollment = await prisma.mT_Enrollment.upsert({
       where: {
         StudentId_ClassId: { StudentId, ClassId },
       },
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     await auditLog({
       userId: user.userId,
       action: "STUDENT_ENROLLED",
-      entityType: "sched_Enrollments",
+      entityType: "MT_Enrollment",
       entityId: enrollment.EnrollmentId.toString(),
       newValues: { StudentId, ClassId },
       ipAddress: ip,

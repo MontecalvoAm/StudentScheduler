@@ -7,20 +7,28 @@ datasource db {
 }
 
 // ─────────────────────────────────────────
-// USERS & ROLES
+// MASTER: ROLES & USERS
 // ─────────────────────────────────────────
 
-model sched_Roles {
-  RoleId      Int    @id @default(autoincrement())
-  RoleName    String @unique @db.VarChar(50)
-  Description String? @db.VarChar(255)
-  CreatedAt   DateTime @default(now())
-  UpdatedAt   DateTime @updatedAt
+model M_Role {
+  RoleId      Int       @id @default(autoincrement())
+  RoleName    String    @unique @db.VarChar(50)
+  Description String?   @db.VarChar(255)
 
-  Users sched_Users[]
+  // Audit Columns
+  CreatedBy   Int?
+  CreatedAt   DateTime  @default(now())
+  UpdatedBy   Int?
+  UpdatedAt   DateTime  @updatedAt
+  DeletedBy   Int?
+  DeletedAt   DateTime?
+
+  Users M_User[]
+
+  @@map("M_Role")
 }
 
-model sched_Users {
+model M_User {
   UserId            Int       @id @default(autoincrement())
   RoleId            Int
   Email             String    @unique @db.VarChar(255)
@@ -36,94 +44,133 @@ model sched_Users {
   PasswordChangedAt DateTime?
   MfaSecret         String?   @db.VarChar(255) // TOTP scaffold — not enforced Phase 1
   MfaEnabled        Boolean   @default(false)
-  CreatedAt         DateTime  @default(now())
-  UpdatedAt         DateTime  @updatedAt
-  DeletedAt         DateTime? // soft delete
 
-  Role          sched_Roles            @relation(fields: [RoleId], references: [RoleId])
-  Student       sched_Students?
-  Instructor    sched_Instructors?
-  RefreshTokens sched_RefreshTokens[]
-  AuditLogs     sched_AuditLogs[]
+  // Audit Columns
+  CreatedBy   Int?
+  CreatedAt   DateTime  @default(now())
+  UpdatedBy   Int?
+  UpdatedAt   DateTime  @updatedAt
+  DeletedBy   Int?
+  DeletedAt   DateTime? // soft delete
+
+  Role          M_Role            @relation(fields: [RoleId], references: [RoleId])
+  Student       M_Student?
+  Instructor    M_Instructor?
+  RefreshTokens T_RefreshToken[]
+  AuditLogs     T_AuditLog[]
 
   @@index([RoleId])
   @@index([Email])
   @@index([DeletedAt])
+  @@map("M_User")
 }
 
-model sched_RefreshTokens {
+// ─────────────────────────────────────────
+// TRANSACTIONAL: REFRESH TOKENS
+// ─────────────────────────────────────────
+
+model T_RefreshToken {
   TokenId   Int      @id @default(autoincrement())
   UserId    Int
   TokenHash String   @unique @db.VarChar(512)
   ExpiresAt DateTime
   IsRevoked Boolean  @default(false)
-  CreatedAt DateTime @default(now())
   IpAddress String?  @db.VarChar(45)
   UserAgent String?  @db.VarChar(500)
 
-  User sched_Users @relation(fields: [UserId], references: [UserId])
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime?
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  User M_User @relation(fields: [UserId], references: [UserId])
 
   @@index([UserId])
   @@index([ExpiresAt])
+  @@map("T_RefreshToken")
 }
 
 // ─────────────────────────────────────────
-// PROFILES
+// MASTER: PROFILES
 // ─────────────────────────────────────────
 
-model sched_Students {
+model M_Student {
   StudentId     Int       @id @default(autoincrement())
   UserId        Int       @unique
   StudentNumber String    @unique @db.VarChar(50)
   CourseId      Int?
   YearLevel     Int?
   Section       String?   @db.VarChar(20)
-  StudySession  String?   @db.VarChar(10) // Renamed for Session (Day/Night)
-  CreatedAt     DateTime  @default(now())
-  UpdatedAt     DateTime  @updatedAt
-  DeletedAt     DateTime?
+  StudySession  String?   @db.VarChar(10) // Day/Night session
 
-  User              sched_Users              @relation(fields: [UserId], references: [UserId])
-  Course            sched_Courses?           @relation(fields: [CourseId], references: [CourseId])
-  Enrollments       sched_Enrollments[]
-  AttendanceRecords sched_AttendanceRecords[]
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  User              M_User               @relation(fields: [UserId], references: [UserId])
+  Course            M_Course?            @relation(fields: [CourseId], references: [CourseId])
+  Enrollments       MT_Enrollment[]
+  AttendanceRecords T_AttendanceRecord[]
 
   @@index([CourseId])
   @@index([StudentNumber])
+  @@map("M_Student")
 }
 
-model sched_Instructors {
+model M_Instructor {
   InstructorId   Int       @id @default(autoincrement())
   UserId         Int       @unique
   EmployeeNumber String    @unique @db.VarChar(50)
   Department     String?   @db.VarChar(100)
   Specialization String?   @db.VarChar(100)
-  CreatedAt      DateTime  @default(now())
-  UpdatedAt      DateTime  @updatedAt
-  DeletedAt      DateTime?
 
-  User             sched_Users              @relation(fields: [UserId], references: [UserId])
-  ClassAssignments sched_ClassAssignments[]
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  User             M_User              @relation(fields: [UserId], references: [UserId])
+  ClassAssignments MT_ClassAssignment[]
+
+  @@map("M_Instructor")
 }
 
 // ─────────────────────────────────────────
-// ACADEMIC STRUCTURE
+// MASTER: ACADEMIC STRUCTURE
 // ─────────────────────────────────────────
 
-model sched_Courses {
+model M_Course {
   CourseId    Int       @id @default(autoincrement())
   CourseCode  String    @unique @db.VarChar(20)
   CourseName  String    @db.VarChar(200)
   Description String?   @db.Text
   IsActive    Boolean   @default(true)
-  CreatedAt   DateTime  @default(now())
-  UpdatedAt   DateTime  @updatedAt
 
-  Students sched_Students[]
-  Subjects sched_Subjects[]
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Students M_Student[]
+  Subjects M_Subject[]
+
+  @@map("M_Course")
 }
 
-model sched_Subjects {
+model M_Subject {
   SubjectId   Int      @id @default(autoincrement())
   CourseId    Int?
   SubjectCode String   @unique @db.VarChar(20)
@@ -131,84 +178,124 @@ model sched_Subjects {
   Units       Int      @default(3)
   Description String?  @db.Text
   IsActive    Boolean  @default(true)
-  CreatedAt   DateTime @default(now())
-  UpdatedAt   DateTime @updatedAt
 
-  Course  sched_Courses? @relation(fields: [CourseId], references: [CourseId])
-  Classes sched_Classes[]
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Course  M_Course?   @relation(fields: [CourseId], references: [CourseId])
+  Classes MT_Class[]
 
   @@index([CourseId])
+  @@map("M_Subject")
 }
 
-model sched_Rooms {
+model M_Room {
   RoomId    Int      @id @default(autoincrement())
   RoomCode  String   @unique @db.VarChar(30)
   RoomName  String   @db.VarChar(100)
   Building  String?  @db.VarChar(100)
   Capacity  Int      @default(40)
   IsActive  Boolean  @default(true)
-  CreatedAt DateTime @default(now())
-  UpdatedAt DateTime @updatedAt
 
-  Schedules sched_Schedules[]
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Schedules MT_Schedule[]
+
+  @@map("M_Room")
 }
 
 // ─────────────────────────────────────────
-// ACADEMIC TERMS (First-Class Entities)
+// MASTER: ACADEMIC TERMS
 // ─────────────────────────────────────────
 
-model sched_SchoolYears {
+model M_SchoolYear {
   SchoolYearId Int      @id @default(autoincrement())
   YearLabel    String   @unique @db.VarChar(20) // e.g. "2025-2026"
   StartDate    DateTime @db.Date
   EndDate      DateTime @db.Date
   IsActive     Boolean  @default(false)
-  CreatedAt    DateTime @default(now())
-  UpdatedAt    DateTime @updatedAt
 
-  Semesters sched_Semesters[]
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Semesters M_Semester[]
+
+  @@map("M_SchoolYear")
 }
 
-model sched_Semesters {
+model M_Semester {
   SemesterId   Int      @id @default(autoincrement())
   SchoolYearId Int
   SemesterName String   @db.VarChar(50) // "First Semester" | "Second Semester" | "Summer"
   StartDate    DateTime @db.Date
   EndDate      DateTime @db.Date
   IsActive     Boolean  @default(false)
-  CreatedAt    DateTime @default(now())
-  UpdatedAt    DateTime @updatedAt
 
-  SchoolYear sched_SchoolYears @relation(fields: [SchoolYearId], references: [SchoolYearId])
-  Classes    sched_Classes[]
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  SchoolYear M_SchoolYear @relation(fields: [SchoolYearId], references: [SchoolYearId])
+  Classes    MT_Class[]
 
   @@index([SchoolYearId])
+  @@map("M_Semester")
 }
 
-model sched_Classes {
-  ClassId     Int       @id @default(autoincrement())
-  SubjectId   Int
-  SemesterId  Int
-  SectionCode String    @db.VarChar(30)
-  StudySession String?   @db.VarChar(10) // Renamed for Session (Day/Night)
-  MaxStudents Int       @default(40)
-  IsActive    Boolean   @default(true)
-  CreatedAt   DateTime  @default(now())
-  UpdatedAt   DateTime  @updatedAt
-  DeletedAt   DateTime?
+// ─────────────────────────────────────────
+// MASTER-TRANSACTIONAL: CLASSES & SCHEDULES
+// ─────────────────────────────────────────
 
-  Subject          sched_Subjects         @relation(fields: [SubjectId], references: [SubjectId])
-  Semester         sched_Semesters        @relation(fields: [SemesterId], references: [SemesterId])
-  Schedules        sched_Schedules[]
-  Enrollments      sched_Enrollments[]
-  ClassAssignments sched_ClassAssignments[]
+model MT_Class {
+  ClassId      Int       @id @default(autoincrement())
+  SubjectId    Int
+  SemesterId   Int
+  SectionCode  String    @db.VarChar(30)
+  StudySession String?   @db.VarChar(10) // Day/Night session
+  MaxStudents  Int       @default(40)
+  IsActive     Boolean   @default(true)
+
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Subject          M_Subject           @relation(fields: [SubjectId], references: [SubjectId])
+  Semester         M_Semester          @relation(fields: [SemesterId], references: [SemesterId])
+  Schedules        MT_Schedule[]
+  Enrollments      MT_Enrollment[]
+  ClassAssignments MT_ClassAssignment[]
 
   @@unique([SubjectId, SectionCode, SemesterId])
   @@index([SemesterId])
   @@index([SubjectId])
+  @@map("MT_Class")
 }
 
-model sched_Schedules {
+model MT_Schedule {
   ScheduleId    Int       @id @default(autoincrement())
   ClassId       Int
   RoomId        Int
@@ -218,18 +305,25 @@ model sched_Schedules {
   EffectiveFrom DateTime  @db.Date
   EffectiveTo   DateTime? @db.Date
   IsActive      Boolean   @default(true)
-  CreatedAt     DateTime  @default(now())
-  UpdatedAt     DateTime  @updatedAt
 
-  Class              sched_Classes            @relation(fields: [ClassId], references: [ClassId])
-  Room               sched_Rooms              @relation(fields: [RoomId], references: [RoomId])
-  AttendanceSessions sched_AttendanceSessions[]
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Class              MT_Class              @relation(fields: [ClassId], references: [ClassId])
+  Room               M_Room                @relation(fields: [RoomId], references: [RoomId])
+  AttendanceSessions T_AttendanceSession[]
 
   @@index([ClassId, DayOfWeek])
   @@index([RoomId, DayOfWeek])
+  @@map("MT_Schedule")
 }
 
-model sched_Enrollments {
+model MT_Enrollment {
   EnrollmentId Int       @id @default(autoincrement())
   StudentId    Int
   ClassId      Int
@@ -237,15 +331,24 @@ model sched_Enrollments {
   DroppedAt    DateTime?
   Status       String    @default("ACTIVE") @db.VarChar(20) // ACTIVE | DROPPED | COMPLETED
 
-  Student sched_Students @relation(fields: [StudentId], references: [StudentId])
-  Class   sched_Classes  @relation(fields: [ClassId], references: [ClassId])
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime?
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Student M_Student @relation(fields: [StudentId], references: [StudentId])
+  Class   MT_Class  @relation(fields: [ClassId], references: [ClassId])
 
   @@unique([StudentId, ClassId])
   @@index([ClassId])
   @@index([StudentId])
+  @@map("MT_Enrollment")
 }
 
-model sched_ClassAssignments {
+model MT_ClassAssignment {
   AssignmentId Int       @id @default(autoincrement())
   InstructorId Int
   ClassId      Int
@@ -253,18 +356,27 @@ model sched_ClassAssignments {
   RemovedAt    DateTime?
   IsPrimary    Boolean   @default(true)
 
-  Instructor sched_Instructors @relation(fields: [InstructorId], references: [InstructorId])
-  Class      sched_Classes     @relation(fields: [ClassId], references: [ClassId])
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime?
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Instructor M_Instructor @relation(fields: [InstructorId], references: [InstructorId])
+  Class      MT_Class     @relation(fields: [ClassId], references: [ClassId])
 
   @@unique([InstructorId, ClassId])
   @@index([ClassId])
+  @@map("MT_ClassAssignment")
 }
 
 // ─────────────────────────────────────────
-// ATTENDANCE
+// TRANSACTIONAL: ATTENDANCE
 // ─────────────────────────────────────────
 
-model sched_AttendanceSessions {
+model T_AttendanceSession {
   SessionId   Int       @id @default(autoincrement())
   ScheduleId  Int
   SessionDate DateTime  @db.Date
@@ -275,17 +387,24 @@ model sched_AttendanceSessions {
   QrExpiresAt DateTime?
   Status      String    @default("PENDING") @db.VarChar(20) // PENDING | OPEN | CLOSED | CANCELLED
   Method      String    @default("BUTTON") @db.VarChar(20) // BUTTON | QR | BOTH
-  CreatedAt   DateTime  @default(now())
-  UpdatedAt   DateTime  @updatedAt
 
-  Schedule          sched_Schedules          @relation(fields: [ScheduleId], references: [ScheduleId])
-  AttendanceRecords sched_AttendanceRecords[]
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Schedule          MT_Schedule          @relation(fields: [ScheduleId], references: [ScheduleId])
+  AttendanceRecords T_AttendanceRecord[]
 
   @@index([ScheduleId, SessionDate])
   @@index([Status])
+  @@map("T_AttendanceSession")
 }
 
-model sched_AttendanceRecords {
+model T_AttendanceRecord {
   AttendanceRecordId Int      @id @default(autoincrement())
   SessionId          Int
   StudentId          Int
@@ -296,46 +415,74 @@ model sched_AttendanceRecords {
   IsOverridden       Boolean  @default(false)
   OverriddenAt       DateTime?
   OverriddenByUserId Int?
-  CreatedAt          DateTime @default(now())
-  UpdatedAt          DateTime @updatedAt
 
-  Session sched_AttendanceSessions @relation(fields: [SessionId], references: [SessionId])
-  Student sched_Students           @relation(fields: [StudentId], references: [StudentId])
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Session T_AttendanceSession @relation(fields: [SessionId], references: [SessionId])
+  Student M_Student           @relation(fields: [StudentId], references: [StudentId])
 
   @@unique([SessionId, StudentId]) // immutable: one record per student per session
   @@index([StudentId])
   @@index([SessionId])
+  @@map("T_AttendanceRecord")
 }
 
 // ─────────────────────────────────────────
-// AUDIT & SYSTEM
+// TRANSACTIONAL: AUDIT & SYSTEM
 // ─────────────────────────────────────────
 
-model sched_AuditLogs {
-  AuditLogId  Int      @id @default(autoincrement())
-  UserId      Int?
-  Action      String   @db.VarChar(100) // e.g. USER_CREATED, ATTENDANCE_OVERRIDDEN
-  EntityType  String   @db.VarChar(100) // e.g. sched_Users, sched_AttendanceRecords
-  EntityId    String?  @db.VarChar(50)
-  OldValues   Json?
-  NewValues   Json?
-  IpAddress   String?  @db.VarChar(45)
-  UserAgent   String?  @db.VarChar(500)
-  CreatedAt   DateTime @default(now())
+model T_AuditLog {
+  AuditLogId Int      @id @default(autoincrement())
+  UserId     Int?
+  Action     String   @db.VarChar(100) // e.g. USER_CREATED, ATTENDANCE_OVERRIDDEN
+  EntityType String   @db.VarChar(100) // e.g. M_User, T_AttendanceRecord
+  EntityId   String?  @db.VarChar(50)
+  OldValues  Json?
+  NewValues  Json?
+  IpAddress  String?  @db.VarChar(45)
+  UserAgent  String?  @db.VarChar(500)
 
-  User sched_Users? @relation(fields: [UserId], references: [UserId])
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime?
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  User M_User? @relation(fields: [UserId], references: [UserId])
 
   @@index([UserId])
   @@index([EntityType, EntityId])
   @@index([CreatedAt])
   @@index([Action])
+  @@map("T_AuditLog")
 }
 
-model sched_SystemSettings {
+// ─────────────────────────────────────────
+// MASTER: SYSTEM SETTINGS
+// ─────────────────────────────────────────
+
+model M_SystemSetting {
   SettingId       Int      @id @default(autoincrement())
   SettingKey      String   @unique @db.VarChar(100)
   SettingValue    String   @db.Text
   Description     String?  @db.VarChar(255)
-  UpdatedAt       DateTime @updatedAt
   UpdatedByUserId Int?
+
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  @@map("M_SystemSetting")
 }

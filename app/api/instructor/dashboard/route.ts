@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await requireRole(req, ROLES.INSTRUCTOR);
 
-    const instructor = await prisma.sched_Instructors.findUnique({
+    const instructor = await prisma.m_Instructor.findUnique({
       where: { UserId: user.userId },
     });
 
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const dayOfWeek = today.getDay();
 
     // 1. Get Today's Schedules for the Instructor
-    const schedules = await prisma.sched_Schedules.findMany({
+    const schedules = await prisma.mT_Schedule.findMany({
       where: {
         Class: {
           DeletedAt: null,
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     });
 
     // 2. Get active (OPEN) attendance sessions
-    const activeSessions = await prisma.sched_AttendanceSessions.findMany({
+    const activeSessions = await prisma.t_AttendanceSession.findMany({
       where: {
         Schedule: {
           Class: {
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
     });
 
     // 3. Get all classes assigned to this instructor
-    const classes = await prisma.sched_Classes.findMany({
+    const classes = await prisma.mT_Class.findMany({
       where: {
         DeletedAt: null,
         ClassAssignments: {

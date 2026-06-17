@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole, ROLES, AuthError } from "@/lib/auth/rbac";
-import { MarkAttendanceSchema, MarkAttendanceQrSchema } from "@/lib/schemas";
-import { verifyQrToken } from "@/lib/auth/jwt";
+import { MarkAttendanceSchema } from "@/lib/schemas";
 import { auditLog } from "@/lib/audit-logger";
 import { applySecurityHeaders } from "@/lib/security/headers";
 
@@ -26,7 +25,7 @@ export async function POST(req: NextRequest) {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
 
     // Get student profile
-    const student = await prisma.sched_Students.findFirst({
+    const student = await prisma.m_Student.findFirst({
       where: { UserId: user.userId, DeletedAt: null },
     });
     if (!student) {
@@ -73,7 +72,7 @@ async function markAttendance({
   ip: string | null;
 }): Promise<NextResponse> {
   // 1. Verify session is OPEN and supports this method
-  const session = await prisma.sched_AttendanceSessions.findFirst({
+  const session = await prisma.t_AttendanceSession.findFirst({
     where: {
       SessionId: sessionId,
       Status: "OPEN",
@@ -114,7 +113,7 @@ async function markAttendance({
 
   // 3. Check auto-close
   if (session.AutoCloseAt && session.AutoCloseAt < new Date()) {
-    await prisma.sched_AttendanceSessions.update({
+    await prisma.t_AttendanceSession.update({
       where: { SessionId: sessionId },
       data: { Status: "CLOSED", ClosedAt: new Date() },
     });
@@ -138,7 +137,7 @@ async function markAttendance({
   }
 
   // 5. Check for duplicate attendance
-  const existing = await prisma.sched_AttendanceRecords.findUnique({
+  const existing = await prisma.t_AttendanceRecord.findUnique({
     where: {
       SessionId_StudentId: { SessionId: sessionId, StudentId: studentId },
     },
@@ -166,7 +165,7 @@ async function markAttendance({
   const status = now > lateTime ? "LATE" : "PRESENT";
 
   // 7. Create immutable attendance record
-  const record = await prisma.sched_AttendanceRecords.create({
+  const record = await prisma.t_AttendanceRecord.create({
     data: {
       SessionId: sessionId,
       StudentId: studentId,
@@ -179,7 +178,7 @@ async function markAttendance({
   await auditLog({
     userId: markedByUserId,
     action: "ATTENDANCE_MARKED",
-    entityType: "sched_AttendanceRecords",
+    entityType: "T_AttendanceRecord",
     entityId: record.AttendanceRecordId,
     newValues: { SessionId: sessionId, StudentId: studentId, Status: status, Method: method },
     ipAddress: ip,

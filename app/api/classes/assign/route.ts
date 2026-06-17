@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     const { InstructorId, ClassId, IsPrimary } = parsed.data;
 
     // Verify instructor exists
-    const instructor = await prisma.sched_Instructors.findUnique({
+    const instructor = await prisma.m_Instructor.findUnique({
       where: { InstructorId },
     });
 
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify class exists and is active
-    const targetClass = await prisma.sched_Classes.findUnique({
+    const targetClass = await prisma.mT_Class.findUnique({
       where: { ClassId, DeletedAt: null },
     });
 
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Assign instructor
-    const assignment = await prisma.sched_ClassAssignments.upsert({
+    const assignment = await prisma.mT_ClassAssignment.upsert({
       where: {
         InstructorId_ClassId: { InstructorId, ClassId },
       },
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     await auditLog({
       userId: user.userId,
       action: "INSTRUCTOR_ASSIGNED",
-      entityType: "sched_ClassAssignments",
+      entityType: "MT_ClassAssignment",
       entityId: assignment.AssignmentId.toString(),
       newValues: { InstructorId, ClassId, IsPrimary },
       ipAddress: ip,

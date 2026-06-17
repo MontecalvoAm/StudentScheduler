@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Verify class belongs to instructor or user is admin
-    const isAssigned = await prisma.sched_ClassAssignments.findFirst({
+    const isAssigned = await prisma.mT_ClassAssignment.findFirst({
       where: {
         ClassId: classId,
         ...(user.role === ROLES.INSTRUCTOR && {
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Get class details
-    const targetClass = await prisma.sched_Classes.findUnique({
+    const targetClass = await prisma.mT_Class.findUnique({
       where: { ClassId: classId },
       include: {
         Subject: true,
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Get enrolled students
-    const enrollments = await prisma.sched_Enrollments.findMany({
+    const enrollments = await prisma.mT_Enrollment.findMany({
       where: { ClassId: classId, Status: "ACTIVE" },
       include: {
         Student: {
@@ -66,14 +66,14 @@ export async function GET(req: NextRequest) {
     });
 
     // Get all completed sessions for this class schedules
-    const schedules = await prisma.sched_Schedules.findMany({
+    const schedules = await prisma.mT_Schedule.findMany({
       where: { ClassId: classId, IsActive: true },
       select: { ScheduleId: true },
     });
 
     const scheduleIds = schedules.map((s) => s.ScheduleId);
 
-    const sessions = await prisma.sched_AttendanceSessions.findMany({
+    const sessions = await prisma.t_AttendanceSession.findMany({
       where: {
         ScheduleId: { in: scheduleIds },
         Status: "CLOSED",
@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
     const sessionIds = sessions.map((s) => s.SessionId);
 
     // Get attendance records for these sessions
-    const records = await prisma.sched_AttendanceRecords.findMany({
+    const records = await prisma.t_AttendanceRecord.findMany({
       where: { SessionId: { in: sessionIds } },
       select: { StudentId: true, Status: true },
     });
