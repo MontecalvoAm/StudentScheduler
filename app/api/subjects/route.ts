@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole, ROLES, AuthError } from "@/lib/auth/rbac";
+import { requireRole, ROLES, AuthError , requirePermission } from "@/lib/auth/rbac";
 import { CreateSubjectSchema } from "@/lib/schemas";
 import { auditLog } from "@/lib/audit-logger";
 import { applySecurityHeaders } from "@/lib/security/headers";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireRole(req, ROLES.SUPER_ADMIN);
+    await await requirePermission(req, "subjects", "CanRead");
     const [subjects, totalSubjects, activeSubjects, unitsAgg] = [
       await prisma.m_Subject.findMany({
         orderBy: { SubjectCode: "asc" },
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireRole(req, ROLES.SUPER_ADMIN);
+    const user = await requirePermission(req, "subjects", "CanCreate");
     const body = await req.json();
 
     const parsed = CreateSubjectSchema.safeParse(body);

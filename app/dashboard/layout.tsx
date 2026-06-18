@@ -22,40 +22,78 @@ import {
   GraduationCap,
   Layers,
   CalendarDays,
+  Shield,
 } from "lucide-react";
 
 interface MenuItem {
-  name: string;
-  href: string;
-  icon: React.ComponentType<any>;
+  name:      string;
+  href:      string;
+  icon:      React.ComponentType<any>;
+  moduleKey: string; // maps to M_Module.ModuleKey for RBAC filtering
 }
+
+// Full catalogue of admin nav items — filtered at runtime by permission map
+const ADMIN_NAV: MenuItem[] = [
+  { name: "Dashboard",   href: "/dashboard/admin",              icon: Activity,    moduleKey: "dashboard"  },
+  { name: "Users",       href: "/dashboard/admin/users",        icon: Users,       moduleKey: "users"      },
+  { name: "Departments", href: "/dashboard/admin/departments",  icon: Layers,      moduleKey: "departments"},
+  { name: "Courses",     href: "/dashboard/admin/courses",      icon: GraduationCap, moduleKey: "courses"  },
+  { name: "Subjects",    href: "/dashboard/admin/subjects",     icon: BookOpen,    moduleKey: "subjects"   },
+  { name: "Rooms",       href: "/dashboard/admin/rooms",        icon: MapPin,      moduleKey: "rooms"      },
+  { name: "Classes",     href: "/dashboard/admin/classes",      icon: Award,       moduleKey: "classes"    },
+  { name: "Calendar",    href: "/dashboard/admin/calendar",     icon: CalendarDays,moduleKey: "calendar"   },
+  { name: "Schedules",   href: "/dashboard/admin/schedules",    icon: Calendar,    moduleKey: "schedules"  },
+  { name: "Audit Logs",  href: "/dashboard/admin/audit-logs",   icon: ShieldAlert, moduleKey: "audit-logs" },
+];
+
+const INSTRUCTOR_NAV: MenuItem[] = [
+  { name: "Dashboard", href: "/dashboard/instructor",          icon: Activity,  moduleKey: "dashboard" },
+  { name: "Sessions",  href: "/dashboard/instructor/sessions", icon: Clock,     moduleKey: "attendance"},
+  { name: "Reports",   href: "/dashboard/instructor/reports",  icon: FileText,  moduleKey: "reports"   },
+];
+
+const STUDENT_NAV: MenuItem[] = [
+  { name: "Dashboard",   href: "/dashboard/student",            icon: Activity, moduleKey: "dashboard" },
+  { name: "My Schedule", href: "/dashboard/student/schedule",   icon: Calendar, moduleKey: "schedules" },
+  { name: "Attendance",  href: "/dashboard/student/attendance", icon: Clock,    moduleKey: "attendance"},
+];
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const router = useRouter();
+  const router   = useRouter();
   const pathname = usePathname();
-  const { user, setUser, clearUser, isInitialized, setInitialized } =
+  const { user, setUser, clearUser, isInitialized, setInitialized, permissions, setPermissions, can } =
     useAuthStore();
   const { sidebarOpen, toggleSidebar, setSidebarOpen, addToast } = useUIStore();
-  const [syncing, setSyncing] = useState(true);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [syncing, setSyncing]           = useState(true);
+  const [currentTime, setCurrentTime]   = useState(new Date());
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
-  // Sync auth state with API on mount
+  // Sync auth state + permissions with API on mount
   useEffect(() => {
     async function syncAuth() {
       try {
-        const response = await fetch("/api/auth/me");
-        if (response.ok) {
-          const result = await response.json();
+        const [meRes, permRes] = await Promise.all([
+          fetch("/api/auth/me"),
+          fetch("/api/auth/me/permissions"),
+        ]);
+
+        if (meRes.ok) {
+          const result = await meRes.json();
           setUser(result.user);
         } else {
           clearUser();
           router.push("/");
+          return;
+        }
+
+        if (permRes.ok) {
+          const permResult = await permRes.json();
+          setPermissions(permResult.permissions ?? {});
         }
       } catch (err) {
         console.error("Auth sync error:", err);
@@ -65,7 +103,7 @@ export default function DashboardLayout({
       }
     }
     syncAuth();
-  }, [setUser, clearUser, router, setInitialized]);
+  }, [setUser, clearUser, router, setInitialized, setPermissions]);
 
   // Update time every second
   useEffect(() => {
@@ -111,56 +149,64 @@ export default function DashboardLayout({
 
   if (!user) return null;
 
-  // Build menu items based on role
-  const menuItems: MenuItem[] = [];
+  // ─── Build menu items based on role + RBAC permission map ─────────────────
+  const buildMenuItems = (): MenuItem[] => {
+    let baseNav: MenuItem[] = [];
 
-  if (user.Role === "SUPER_ADMIN") {
-    menuItems.push(
-      { name: "Dashboard", href: "/dashboard/admin", icon: Activity },
-      { name: "Users", href: "/dashboard/admin/users", icon: Users },
-      { name: "Subjects", href: "/dashboard/admin/subjects", icon: BookOpen },
-      { name: "Rooms", href: "/dashboard/admin/rooms", icon: MapPin },
-      { name: "Classes", href: "/dashboard/admin/classes", icon: Award },
-      { name: "Calendar", href: "/dashboard/admin/calendar", icon: CalendarDays },
-      { name: "Schedules", href: "/dashboard/admin/schedules", icon: Calendar },
-      { name: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ShieldAlert }
-    );
-  } else if (user.Role === "INSTRUCTOR") {
-    menuItems.push(
-      { name: "Dashboard", href: "/dashboard/instructor", icon: Activity },
-      { name: "Sessions", href: "/dashboard/instructor/sessions", icon: Clock },
-      { name: "Reports", href: "/dashboard/instructor/reports", icon: FileText }
-    );
-  } else if (user.Role === "STUDENT") {
-    menuItems.push(
-      { name: "Dashboard", href: "/dashboard/student", icon: Activity },
-      { name: "My Schedule", href: "/dashboard/student/schedule", icon: Calendar },
-      { name: "Attendance", href: "/dashboard/student/attendance", icon: Clock }
-    );
-  }
+    if (user.Role === "SUPER_ADMIN" || user.Role === "ADMIN") {
+      baseNav = [...ADMIN_NAV];
+    } else if (user.Role === "INSTRUCTOR") {
+      baseNav = [...INSTRUCTOR_NAV];
+    } else if (user.Role === "STUDENT") {
+      baseNav = [...STUDENT_NAV];
+    } else {
+      // Custom roles are administrative delegates and use the Admin Nav
+      baseNav = [...ADMIN_NAV];
+    }
+
+    // Unify Granular RBAC: If a non-admin role is granted access to a management module,
+    // append the module's link from the ADMIN_NAV if it's not already in their baseNav.
+    if (user.Role === "INSTRUCTOR" || user.Role === "STUDENT") {
+      const existingKeys = new Set(baseNav.map(item => item.moduleKey));
+      for (const item of ADMIN_NAV) {
+        if (!existingKeys.has(item.moduleKey) && can(item.moduleKey, "CanRead")) {
+          baseNav.push(item);
+        }
+      }
+    }
+
+    return baseNav.filter((item) => {
+      // Dashboard is typically always visible as the landing page
+      if (item.moduleKey === "dashboard") return true;
+      // Filter the rest strictly by Granular RBAC
+      return can(item.moduleKey, "CanRead");
+    });
+  };
+
+  const menuItems = buildMenuItems();
 
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
       clearUser();
       addToast({
-        type: "info",
-        title: "Logged Out",
+        type:    "info",
+        title:   "Logged Out",
         message: "You have been securely logged out.",
       });
       router.push("/");
     } catch (err) {
       console.error(err);
       addToast({
-        type: "error",
-        title: "Logout Error",
+        type:    "error",
+        title:   "Logout Error",
         message: "Failed to perform server logout.",
       });
     }
   };
 
   return (
-    <div className="min-h-screen flex bg-gray-50 overflow-hidden">
+    <div className="h-screen flex bg-gray-50 overflow-hidden">
       {/* ─── Sidebar ─── */}
       <aside
         className={`fixed inset-y-0 left-0 z-30 bg-white border-r border-gray-200 transition-all duration-300 ease-in-out transform lg:translate-x-0 lg:static flex flex-col ${
@@ -259,7 +305,7 @@ export default function DashboardLayout({
           )}
         </div>
 
-        {/* Collapse Toggle Button (Improved & Larger) */}
+        {/* Collapse Toggle Button */}
         <button
           onClick={toggleSidebar}
           className="absolute top-1/2 -right-4 -translate-y-1/2 w-8 h-8 bg-white border border-gray-200 rounded-full shadow-lg flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:border-indigo-300 hover:scale-110 active:scale-95 transition-all z-50 cursor-pointer"
@@ -286,14 +332,14 @@ export default function DashboardLayout({
             <span className="text-xs font-bold text-slate-800 tracking-wide uppercase">
               {currentTime.toLocaleDateString("en-US", {
                 weekday: "long",
-                month: "long",
-                day: "numeric",
-                year: "numeric",
+                month:   "long",
+                day:     "numeric",
+                year:    "numeric",
               })}
             </span>
             <span className="text-[10px] font-medium text-slate-400">
               Current Time: {currentTime.toLocaleTimeString("en-US", {
-                hour: "2-digit",
+                hour:   "2-digit",
                 minute: "2-digit",
                 second: "2-digit",
               })}

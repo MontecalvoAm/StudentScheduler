@@ -31,8 +31,10 @@ function getRoleDashboard(role: string): string {
     case ROLES.INSTRUCTOR:
       return "/dashboard/instructor";
     case ROLES.STUDENT:
-    default:
       return "/dashboard/student";
+    default:
+      // Custom roles act as administrative delegates
+      return "/dashboard/admin";
   }
 }
 

@@ -195,5 +195,3 @@ async function markAttendance({
     })
   );
 }
-
-export { markAttendance };

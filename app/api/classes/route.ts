@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole, ROLES, AuthError } from "@/lib/auth/rbac";
+import { requireRole, ROLES, AuthError , requirePermission } from "@/lib/auth/rbac";
 import { CreateClassSchema } from "@/lib/schemas";
 import { auditLog } from "@/lib/audit-logger";
 import { applySecurityHeaders } from "@/lib/security/headers";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireRole(req, ROLES.SUPER_ADMIN);
+    await await requirePermission(req, "classes", "CanRead");
     const classes = await prisma.mT_Class.findMany({
       where: { DeletedAt: null },
       include: {
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireRole(req, ROLES.SUPER_ADMIN);
+    const user = await requirePermission(req, "classes", "CanCreate");
     const body = await req.json();
 
     const parsed = CreateClassSchema.safeParse(body);
