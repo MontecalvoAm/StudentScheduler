@@ -11,25 +11,29 @@ datasource db {
 // ─────────────────────────────────────────
 
 model M_Role {
-  RoleId      Int       @id @default(autoincrement())
-  RoleName    String    @unique @db.VarChar(50)
-  Description String?   @db.VarChar(255)
+  RoleId      Int     @id @default(autoincrement())
+  RoleToken   String  @unique @default(uuid()) @db.VarChar(36)
+  RoleName    String  @unique @db.VarChar(50)
+  Description String? @db.VarChar(255)
+  IsSystem    Boolean @default(false) // true = seeded system roles (SUPER_ADMIN, etc.)
 
   // Audit Columns
-  CreatedBy   Int?
-  CreatedAt   DateTime  @default(now())
-  UpdatedBy   Int?
-  UpdatedAt   DateTime  @updatedAt
-  DeletedBy   Int?
-  DeletedAt   DateTime?
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
 
-  Users M_User[]
+  Users       M_User[]
+  Permissions M_RolePermission[]
 
   @@map("M_Role")
 }
 
 model M_User {
   UserId            Int       @id @default(autoincrement())
+  UserToken         String    @unique @default(uuid()) @db.VarChar(36)
   RoleId            Int
   Email             String    @unique @db.VarChar(255)
   PasswordHash      String    @db.VarChar(255)
@@ -46,18 +50,19 @@ model M_User {
   MfaEnabled        Boolean   @default(false)
 
   // Audit Columns
-  CreatedBy   Int?
-  CreatedAt   DateTime  @default(now())
-  UpdatedBy   Int?
-  UpdatedAt   DateTime  @updatedAt
-  DeletedBy   Int?
-  DeletedAt   DateTime? // soft delete
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime? // soft delete
 
-  Role          M_Role            @relation(fields: [RoleId], references: [RoleId])
+  Role          M_Role                     @relation(fields: [RoleId], references: [RoleId])
   Student       M_Student?
   Instructor    M_Instructor?
   RefreshTokens T_RefreshToken[]
   AuditLogs     T_AuditLog[]
+  Overrides     M_UserPermissionOverride[]
 
   @@index([RoleId])
   @@index([Email])
@@ -98,13 +103,13 @@ model T_RefreshToken {
 // ─────────────────────────────────────────
 
 model M_Student {
-  StudentId     Int       @id @default(autoincrement())
-  UserId        Int       @unique
-  StudentNumber String    @unique @db.VarChar(50)
+  StudentId     Int     @id @default(autoincrement())
+  UserId        Int     @unique
+  StudentNumber String  @unique @db.VarChar(50)
   CourseId      Int?
   YearLevel     Int?
-  Section       String?   @db.VarChar(20)
-  StudySession  String?   @db.VarChar(10) // Day/Night session
+  Section       String? @db.VarChar(20)
+  StudySession  String? @db.VarChar(10) // Day/Night session
 
   // Audit Columns
   CreatedBy Int?
@@ -118,6 +123,7 @@ model M_Student {
   Course            M_Course?            @relation(fields: [CourseId], references: [CourseId])
   Enrollments       MT_Enrollment[]
   AttendanceRecords T_AttendanceRecord[]
+  StudyPlan         T_StudentStudyPlan?
 
   @@index([CourseId])
   @@index([StudentNumber])
@@ -125,11 +131,11 @@ model M_Student {
 }
 
 model M_Instructor {
-  InstructorId   Int       @id @default(autoincrement())
-  UserId         Int       @unique
-  EmployeeNumber String    @unique @db.VarChar(50)
-  Department     String?   @db.VarChar(100)
-  Specialization String?   @db.VarChar(100)
+  InstructorId   Int     @id @default(autoincrement())
+  UserId         Int     @unique
+  EmployeeNumber String  @unique @db.VarChar(50)
+  DepartmentId   Int?
+  Specialization String? @db.VarChar(100)
 
   // Audit Columns
   CreatedBy Int?
@@ -139,9 +145,11 @@ model M_Instructor {
   DeletedBy Int?
   DeletedAt DateTime?
 
-  User             M_User              @relation(fields: [UserId], references: [UserId])
+  User             M_User               @relation(fields: [UserId], references: [UserId])
+  Department       M_Department?        @relation(fields: [DepartmentId], references: [DepartmentId])
   ClassAssignments MT_ClassAssignment[]
 
+  @@index([DepartmentId])
   @@map("M_Instructor")
 }
 
@@ -149,12 +157,13 @@ model M_Instructor {
 // MASTER: ACADEMIC STRUCTURE
 // ─────────────────────────────────────────
 
-model M_Course {
-  CourseId    Int       @id @default(autoincrement())
-  CourseCode  String    @unique @db.VarChar(20)
-  CourseName  String    @db.VarChar(200)
-  Description String?   @db.Text
-  IsActive    Boolean   @default(true)
+model M_Department {
+  DepartmentId    Int     @id @default(autoincrement())
+  DepartmentToken String  @unique @default(uuid()) @db.VarChar(36)
+  DepartmentCode  String  @unique @db.VarChar(20)
+  DepartmentName  String  @db.VarChar(200)
+  Description     String? @db.Text
+  IsActive        Boolean @default(true)
 
   // Audit Columns
   CreatedBy Int?
@@ -164,20 +173,49 @@ model M_Course {
   DeletedBy Int?
   DeletedAt DateTime?
 
-  Students M_Student[]
-  Subjects M_Subject[]
+  Courses     M_Course[]
+  Instructors M_Instructor[]
 
+  @@map("M_Department")
+}
+
+model M_Course {
+  CourseId      Int     @id @default(autoincrement())
+  CourseToken   String  @unique @default(uuid()) @db.VarChar(36)
+  DepartmentId  Int?
+  CourseCode    String  @unique @db.VarChar(20)
+  CourseName    String  @db.VarChar(200)
+  Description   String? @db.Text
+  YearsDuration Int     @default(4)
+  RequiredUnits Int     @default(120)
+  IsActive      Boolean @default(true)
+
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Department     M_Department?     @relation(fields: [DepartmentId], references: [DepartmentId])
+  Students       M_Student[]
+  Subjects       M_Subject[]
+  CourseSubjects M_CourseSubject[]
+
+  @@index([DepartmentId])
   @@map("M_Course")
 }
 
 model M_Subject {
-  SubjectId   Int      @id @default(autoincrement())
-  CourseId    Int?
-  SubjectCode String   @unique @db.VarChar(20)
-  SubjectName String   @db.VarChar(200)
-  Units       Int      @default(3)
-  Description String?  @db.Text
-  IsActive    Boolean  @default(true)
+  SubjectId    Int     @id @default(autoincrement())
+  SubjectToken String  @unique @default(uuid()) @db.VarChar(36)
+  CourseId     Int?
+  SubjectCode  String  @unique @db.VarChar(20)
+  SubjectName  String  @db.VarChar(200)
+  Units        Int     @default(3)
+  Description  String? @db.Text
+  IsActive     Boolean @default(true)
 
   // Audit Columns
   CreatedBy Int?
@@ -187,20 +225,24 @@ model M_Subject {
   DeletedBy Int?
   DeletedAt DateTime?
 
-  Course  M_Course?   @relation(fields: [CourseId], references: [CourseId])
-  Classes MT_Class[]
+  Course                   M_Course?                   @relation(fields: [CourseId], references: [CourseId])
+  Classes                  MT_Class[]
+  CourseSubjects           M_CourseSubject[]
+  PrerequisitesOf          M_SubjectPrerequisite[]     @relation("MainSubject")
+  PrerequisitesRequired    M_SubjectPrerequisite[]     @relation("PrereqSubject")
+  StudentStudyPlanSubjects T_StudentStudyPlanSubject[]
 
   @@index([CourseId])
   @@map("M_Subject")
 }
 
 model M_Room {
-  RoomId    Int      @id @default(autoincrement())
-  RoomCode  String   @unique @db.VarChar(30)
-  RoomName  String   @db.VarChar(100)
-  Building  String?  @db.VarChar(100)
-  Capacity  Int      @default(40)
-  IsActive  Boolean  @default(true)
+  RoomId   Int     @id @default(autoincrement())
+  RoomCode String  @unique @db.VarChar(30)
+  RoomName String  @db.VarChar(100)
+  Building String? @db.VarChar(100)
+  Capacity Int     @default(40)
+  IsActive Boolean @default(true)
 
   // Audit Columns
   CreatedBy Int?
@@ -267,13 +309,13 @@ model M_Semester {
 // ─────────────────────────────────────────
 
 model MT_Class {
-  ClassId      Int       @id @default(autoincrement())
+  ClassId      Int     @id @default(autoincrement())
   SubjectId    Int
   SemesterId   Int
-  SectionCode  String    @db.VarChar(30)
-  StudySession String?   @db.VarChar(10) // Day/Night session
-  MaxStudents  Int       @default(40)
-  IsActive     Boolean   @default(true)
+  SectionCode  String  @db.VarChar(30)
+  StudySession String? @db.VarChar(10) // Day/Night session
+  MaxStudents  Int     @default(40)
+  IsActive     Boolean @default(true)
 
   // Audit Columns
   CreatedBy Int?
@@ -283,8 +325,8 @@ model MT_Class {
   DeletedBy Int?
   DeletedAt DateTime?
 
-  Subject          M_Subject           @relation(fields: [SubjectId], references: [SubjectId])
-  Semester         M_Semester          @relation(fields: [SemesterId], references: [SemesterId])
+  Subject          M_Subject            @relation(fields: [SubjectId], references: [SubjectId])
+  Semester         M_Semester           @relation(fields: [SemesterId], references: [SemesterId])
   Schedules        MT_Schedule[]
   Enrollments      MT_Enrollment[]
   ClassAssignments MT_ClassAssignment[]
@@ -299,7 +341,7 @@ model MT_Schedule {
   ScheduleId    Int       @id @default(autoincrement())
   ClassId       Int
   RoomId        Int
-  DayOfWeek     Int       // 0=Sunday … 6=Saturday
+  DayOfWeek     Int // 0=Sunday … 6=Saturday
   StartTime     String    @db.VarChar(5) // "08:00" HH:MM 24h
   EndTime       String    @db.VarChar(5) // "09:30" HH:MM 24h
   EffectiveFrom DateTime  @db.Date
@@ -405,14 +447,14 @@ model T_AttendanceSession {
 }
 
 model T_AttendanceRecord {
-  AttendanceRecordId Int      @id @default(autoincrement())
+  AttendanceRecordId Int       @id @default(autoincrement())
   SessionId          Int
   StudentId          Int
-  Status             String   @db.VarChar(20) // PRESENT | LATE | ABSENT | EXCUSED
-  MarkedAt           DateTime @default(now())
+  Status             String    @db.VarChar(20) // PRESENT | LATE | ABSENT | EXCUSED
+  MarkedAt           DateTime  @default(now())
   MarkedByUserId     Int?
-  Remarks            String?  @db.Text
-  IsOverridden       Boolean  @default(false)
+  Remarks            String?   @db.Text
+  IsOverridden       Boolean   @default(false)
   OverriddenAt       DateTime?
   OverriddenByUserId Int?
 
@@ -438,15 +480,15 @@ model T_AttendanceRecord {
 // ─────────────────────────────────────────
 
 model T_AuditLog {
-  AuditLogId Int      @id @default(autoincrement())
+  AuditLogId Int     @id @default(autoincrement())
   UserId     Int?
-  Action     String   @db.VarChar(100) // e.g. USER_CREATED, ATTENDANCE_OVERRIDDEN
-  EntityType String   @db.VarChar(100) // e.g. M_User, T_AttendanceRecord
-  EntityId   String?  @db.VarChar(50)
+  Action     String  @db.VarChar(100) // e.g. USER_CREATED, ATTENDANCE_OVERRIDDEN
+  EntityType String  @db.VarChar(100) // e.g. M_User, T_AttendanceRecord
+  EntityId   String? @db.VarChar(50)
   OldValues  Json?
   NewValues  Json?
-  IpAddress  String?  @db.VarChar(45)
-  UserAgent  String?  @db.VarChar(500)
+  IpAddress  String? @db.VarChar(45)
+  UserAgent  String? @db.VarChar(500)
 
   // Audit Columns
   CreatedBy Int?
@@ -470,10 +512,10 @@ model T_AuditLog {
 // ─────────────────────────────────────────
 
 model M_SystemSetting {
-  SettingId       Int      @id @default(autoincrement())
-  SettingKey      String   @unique @db.VarChar(100)
-  SettingValue    String   @db.Text
-  Description     String?  @db.VarChar(255)
+  SettingId       Int     @id @default(autoincrement())
+  SettingKey      String  @unique @db.VarChar(100)
+  SettingValue    String  @db.Text
+  Description     String? @db.VarChar(255)
   UpdatedByUserId Int?
 
   // Audit Columns
@@ -485,4 +527,163 @@ model M_SystemSetting {
   DeletedAt DateTime?
 
   @@map("M_SystemSetting")
+}
+
+// New Subject Prerequisite table
+model M_SubjectPrerequisite {
+  PrerequisiteId        Int    @id @default(autoincrement())
+  PrerequisiteToken     String @unique @default(uuid()) @db.VarChar(36)
+  SubjectId             Int
+  PrerequisiteSubjectId Int
+
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Subject             M_Subject @relation("MainSubject", fields: [SubjectId], references: [SubjectId])
+  PrerequisiteSubject M_Subject @relation("PrereqSubject", fields: [PrerequisiteSubjectId], references: [SubjectId])
+
+  @@unique([SubjectId, PrerequisiteSubjectId])
+  @@map("M_SubjectPrerequisite")
+}
+
+// New Course Subject Mapping table (Curriculum)
+model M_CourseSubject {
+  CourseSubjectId    Int    @id @default(autoincrement())
+  CourseSubjectToken String @unique @default(uuid()) @db.VarChar(36)
+  CourseId           Int
+  SubjectId          Int
+  YearLevel          Int // 1, 2, 3, 4, etc.
+  Semester           Int // 1 = 1st, 2 = 2nd, 3 = Summer
+
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Course  M_Course  @relation(fields: [CourseId], references: [CourseId])
+  Subject M_Subject @relation(fields: [SubjectId], references: [SubjectId])
+
+  @@unique([CourseId, SubjectId, YearLevel, Semester])
+  @@map("M_CourseSubject")
+}
+
+// New Custom Study Plan for Irregular Students
+model T_StudentStudyPlan {
+  StudyPlanId    Int    @id @default(autoincrement())
+  StudyPlanToken String @unique @default(uuid()) @db.VarChar(36)
+  StudentId      Int    @unique
+
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Student  M_Student                   @relation(fields: [StudentId], references: [StudentId])
+  Subjects T_StudentStudyPlanSubject[]
+
+  @@map("T_StudentStudyPlan")
+}
+
+model T_StudentStudyPlanSubject {
+  StudyPlanSubjectId    Int    @id @default(autoincrement())
+  StudyPlanSubjectToken String @unique @default(uuid()) @db.VarChar(36)
+  StudyPlanId           Int
+  SubjectId             Int
+  TargetYearLevel       Int
+  TargetSemester        Int
+  Status                String @default("PENDING") @db.VarChar(20) // PENDING | ENROLLED | COMPLETED | FAILED
+
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  StudyPlan T_StudentStudyPlan @relation(fields: [StudyPlanId], references: [StudyPlanId])
+  Subject   M_Subject          @relation(fields: [SubjectId], references: [SubjectId])
+
+  @@unique([StudyPlanId, SubjectId])
+  @@map("T_StudentStudyPlanSubject")
+}
+
+// ─────────────────────────────────────────
+// MASTER: RBAC — MODULES & PERMISSIONS
+// ─────────────────────────────────────────
+
+model M_Module {
+  ModuleId    Int     @id @default(autoincrement())
+  ModuleKey   String  @unique @db.VarChar(50) // e.g. "users", "schedules"
+  ModuleLabel String  @db.VarChar(100) // e.g. "Users Management"
+  SortOrder   Int     @default(0)
+  IsActive    Boolean @default(true)
+
+  Permissions M_RolePermission[]
+  Overrides   M_UserPermissionOverride[]
+
+  @@map("M_Module")
+}
+
+model M_RolePermission {
+  PermissionId    Int     @id @default(autoincrement())
+  PermissionToken String  @unique @default(uuid()) @db.VarChar(36)
+  RoleId          Int
+  ModuleId        Int
+  CanCreate       Boolean @default(false)
+  CanRead         Boolean @default(false)
+  CanUpdate       Boolean @default(false)
+  CanDelete       Boolean @default(false)
+
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Role   M_Role   @relation(fields: [RoleId], references: [RoleId])
+  Module M_Module @relation(fields: [ModuleId], references: [ModuleId])
+
+  @@unique([RoleId, ModuleId])
+  @@index([RoleId])
+  @@map("M_RolePermission")
+}
+
+model M_UserPermissionOverride {
+  OverrideId    Int      @id @default(autoincrement())
+  OverrideToken String   @unique @default(uuid()) @db.VarChar(36)
+  UserId        Int
+  ModuleId      Int
+  CanCreate     Boolean?
+  CanRead       Boolean?
+  CanUpdate     Boolean?
+  CanDelete     Boolean?
+
+  // Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  User   M_User   @relation(fields: [UserId], references: [UserId])
+  Module M_Module @relation(fields: [ModuleId], references: [ModuleId])
+
+  @@unique([UserId, ModuleId])
+  @@index([UserId])
+  @@map("M_UserPermissionOverride")
 }

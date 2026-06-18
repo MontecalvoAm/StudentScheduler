@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole, ROLES } from "@/lib/auth/rbac";
+import { requireRole, ROLES , requirePermission } from "@/lib/auth/rbac";
 import { AuthError } from "@/lib/auth/rbac";
 import { CreateUserSchema, UserListQuerySchema } from "@/lib/schemas";
 import { hashPassword, validatePasswordStrength } from "@/lib/auth/password";
@@ -12,7 +12,7 @@ import crypto from "crypto";
 // ─── GET /api/users — List users (Admin only) ────────────────────────────────
 export async function GET(req: NextRequest) {
   try {
-    const user = await requireRole(req, ROLES.SUPER_ADMIN);
+    const user = await requirePermission(req, "users", "CanRead");
     const { searchParams } = req.nextUrl;
 
     const query = UserListQuerySchema.safeParse(
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const { page, limit, search, roleId, isActive, courseId, yearLevel, section, studySession } = query.data;
+    const { page, limit, search, roleToken, isActive, courseId, yearLevel, section, studySession, startDate, endDate } = query.data;
     const skip = (page - 1) * limit;
 
     const where = {
@@ -39,9 +39,15 @@ export async function GET(req: NextRequest) {
           { Email: { contains: search } },
         ],
       }),
-      ...(roleId && { RoleId: roleId }),
+      ...(roleToken && { Role: { RoleToken: roleToken } }),
       ...(isActive !== undefined && { IsActive: isActive }),
-      ...(roleId === 3 && (courseId || yearLevel || section || studySession) && {
+      ...((startDate || endDate) && {
+        CreatedAt: {
+          ...(startDate && { gte: startDate }),
+          ...(endDate && { lte: endDate }),
+        }
+      }),
+      ...((courseId || yearLevel || section || studySession) && {
         Student: {
           ...(courseId && { CourseId: courseId }),
           ...(yearLevel && { YearLevel: yearLevel }),
@@ -59,7 +65,7 @@ export async function GET(req: NextRequest) {
         take: limit,
         orderBy: { CreatedAt: "desc" },
         select: {
-          UserId: true,
+          UserToken: true,
           Email: true,
           FirstName: true,
           LastName: true,
@@ -73,14 +79,27 @@ export async function GET(req: NextRequest) {
             select: {
               StudentId: true,
               StudentNumber: true,
-              CourseId: true,
+              Course: {
+                select: { CourseToken: true }
+              },
               YearLevel: true,
               Section: true,
               StudySession: true,
             },
           },
           Instructor: {
-            select: { InstructorId: true, EmployeeNumber: true, Department: true },
+            select: {
+              InstructorId: true,
+              EmployeeNumber: true,
+              DepartmentId: true,
+              Department: {
+                select: {
+                  DepartmentToken: true,
+                  DepartmentCode: true,
+                  DepartmentName: true,
+                }
+              }
+            },
           },
         },
       }),
@@ -121,7 +140,7 @@ export async function GET(req: NextRequest) {
 // ─── POST /api/users — Create user (Admin only) ──────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const adminUser = await requireRole(req, ROLES.SUPER_ADMIN);
+    const user = await requirePermission(req, "users", "CanCreate");
     const body = await req.json();
 
     const parsed = CreateUserSchema.safeParse(body);
@@ -136,11 +155,15 @@ export async function POST(req: NextRequest) {
 
     const data = parsed.data;
 
-    // Generate secure temp password
-    const tempPassword = crypto.randomBytes(8).toString("base64url");
-    const { valid } = validatePasswordStrength(tempPassword + "A1!");
-    const finalPassword = valid ? tempPassword + "A1!" : "Temp@" + crypto.randomBytes(6).toString("hex") + "1!";
+    // Validate manual password strength
+    const { valid, errors } = validatePasswordStrength(data.Password);
+    if (!valid) {
+      return applySecurityHeaders(
+        NextResponse.json({ error: "WEAK_PASSWORD", message: errors.join(", ") }, { status: 400 })
+      );
+    }
 
+    const finalPassword = data.Password;
     const passwordHash = await hashPassword(finalPassword);
 
     // Verify role exists
@@ -180,22 +203,41 @@ export async function POST(req: NextRequest) {
 
       // Create role-specific profile
       if (role.RoleName === ROLES.STUDENT && data.StudentNumber) {
+        let internalCourseId: number | null = null;
+        if (data.CourseToken) {
+          const course = await tx.m_Course.findUnique({
+            where: { CourseToken: data.CourseToken }
+          });
+          if (course) {
+            internalCourseId = course.CourseId;
+          }
+        }
+
         await tx.m_Student.create({
           data: {
             UserId: created.UserId,
             StudentNumber: data.StudentNumber,
-            CourseId: data.CourseId ?? null,
+            CourseId: internalCourseId,
             YearLevel: data.YearLevel ?? null,
             Section: data.Section ?? null,
             StudySession: data.StudySession ?? null,
           },
         });
       } else if (role.RoleName === ROLES.INSTRUCTOR && data.EmployeeNumber) {
+        let internalDeptId: number | null = null;
+        if (data.DepartmentToken) {
+          const dept = await tx.m_Department.findUnique({
+            where: { DepartmentToken: data.DepartmentToken }
+          });
+          if (dept) {
+            internalDeptId = dept.DepartmentId;
+          }
+        }
         await tx.m_Instructor.create({
           data: {
             UserId: created.UserId,
             EmployeeNumber: data.EmployeeNumber,
-            Department: data.Department ?? null,
+            DepartmentId: internalDeptId,
           },
         });
       }
@@ -213,7 +255,7 @@ export async function POST(req: NextRequest) {
 
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
     await auditLog({
-      userId: adminUser.userId,
+      userId: user.userId,
       action: "USER_CREATED",
       entityType: "M_User",
       entityId: newUser.UserId,
@@ -231,7 +273,7 @@ export async function POST(req: NextRequest) {
         {
           success: true,
           data: {
-            UserId: newUser.UserId,
+            UserToken: newUser.UserToken,
             Email: newUser.Email,
             FirstName: newUser.FirstName,
             LastName: newUser.LastName,

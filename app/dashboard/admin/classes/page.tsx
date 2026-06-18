@@ -61,6 +61,25 @@ interface Student {
   StudentNumber: string;
 }
 
+interface Course {
+  CourseToken: string;
+  CourseCode: string;
+  CourseName: string;
+}
+
+interface CourseSubjectMapping {
+  CourseSubjectToken: string;
+  YearLevel: number;
+  Semester: number;
+  Subject: {
+    SubjectId: number;
+    SubjectToken: string;
+    SubjectCode: string;
+    SubjectName: string;
+    Units: number;
+  };
+}
+
 export default function AdminClassesPage() {
   const { addToast } = useUIStore();
   const [classes, setClasses] = useState<ClassRecord[]>([]);
@@ -68,6 +87,10 @@ export default function AdminClassesPage() {
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [selectedCourseToken, setSelectedCourseToken] = useState("");
+  const [courseMappings, setCourseMappings] = useState<CourseSubjectMapping[]>([]);
+  const [loadingMappings, setLoadingMappings] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
@@ -105,17 +128,19 @@ export default function AdminClassesPage() {
 
   const fetchDependencies = async () => {
     try {
-      const [subjectsRes, semestersRes, instructorsRes, studentsRes] = await Promise.all([
+      const [subjectsRes, semestersRes, instructorsRes, studentsRes, coursesRes] = await Promise.all([
         fetch("/api/subjects"),
         fetch("/api/semesters"),
         fetch("/api/instructors"),
         fetch("/api/students"),
+        fetch("/api/courses"),
       ]);
 
       if (subjectsRes.ok) setSubjects((await subjectsRes.json()).subjects);
       if (semestersRes.ok) setSemesters((await semestersRes.json()).semesters);
       if (instructorsRes.ok) setInstructors((await instructorsRes.json()).instructors);
       if (studentsRes.ok) setStudents((await studentsRes.json()).students);
+      if (coursesRes.ok) setCourses((await coursesRes.json()).courses);
     } catch (err) {
       console.error("Dependency loading error:", err);
     }
@@ -125,6 +150,30 @@ export default function AdminClassesPage() {
     fetchClasses();
     fetchDependencies();
   }, []);
+
+  useEffect(() => {
+    if (!selectedCourseToken) {
+      setCourseMappings([]);
+      return;
+    }
+
+    const fetchCourseSubjects = async () => {
+      setLoadingMappings(true);
+      try {
+        const res = await fetch(`/api/courses/subjects?courseToken=${selectedCourseToken}`);
+        if (res.ok) {
+          const result = await res.json();
+          setCourseMappings(result.mappings || []);
+        }
+      } catch (err) {
+        console.error("Error fetching course subjects:", err);
+      } finally {
+        setLoadingMappings(false);
+      }
+    };
+
+    fetchCourseSubjects();
+  }, [selectedCourseToken]);
 
   const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,11 +270,54 @@ export default function AdminClassesPage() {
   };
 
   const resetClassForm = () => {
+    setSelectedCourseToken("");
+    setCourseMappings([]);
     setSubjectId("");
     setSemesterId("");
     setSectionCode("");
     setStudySession("");
     setMaxStudents(40);
+  };
+
+  const handleSubjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const subIdVal = e.target.value;
+    setSubjectId(subIdVal);
+
+    if (!subIdVal) {
+      setSemesterId("");
+      return;
+    }
+
+    const subIdNum = parseInt(subIdVal, 10);
+    const mapping = courseMappings.find((m) => m.Subject.SubjectId === subIdNum);
+    if (mapping) {
+      const targetTermStr = mapping.Semester === 1 
+        ? "First" 
+        : mapping.Semester === 2 
+          ? "Second" 
+          : "Summer";
+      
+      const matchedSem = semesters.find((sem) => 
+        sem.SemesterName.toLowerCase().includes(targetTermStr.toLowerCase())
+      );
+
+      if (matchedSem) {
+        setSemesterId(matchedSem.SemesterId.toString());
+      } else {
+        if (semesters.length > 0) {
+          setSemesterId(semesters[0].SemesterId.toString());
+        } else {
+          setSemesterId("");
+        }
+        addToast({ 
+          type: "info", 
+          title: "Semester Mapping Notice", 
+          message: `Curriculum term '${targetTermStr} Semester' is not currently active. Manually select or activate it.` 
+        });
+      }
+    } else {
+      setSemesterId("");
+    }
   };
 
   const filtered = classes.filter(
@@ -368,19 +460,51 @@ export default function AdminClassesPage() {
 
             <form onSubmit={handleCreateClass} className="space-y-4">
               <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Course</label>
+                <select
+                  required
+                  value={selectedCourseToken}
+                  onChange={(e) => {
+                    setSelectedCourseToken(e.target.value);
+                    setSubjectId("");
+                    setSemesterId("");
+                  }}
+                  className="w-full px-4 py-2.5 rounded-xl text-slate-800 glass-input text-xs"
+                >
+                  <option value="">Select Course...</option>
+                  {courses.map((c) => (
+                    <option key={c.CourseToken} value={c.CourseToken}>
+                      {c.CourseCode} - {c.CourseName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Subject</label>
                 <select
                   required
+                  disabled={!selectedCourseToken || loadingMappings}
                   value={subjectId}
-                  onChange={(e) => setSubjectId(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl text-slate-800 glass-input text-xs"
+                  onChange={handleSubjectChange}
+                  className="w-full px-4 py-2.5 rounded-xl text-slate-800 glass-input text-xs disabled:opacity-50"
                 >
-                  <option value="">Select Subject...</option>
-                  {subjects.map((s) => (
-                    <option key={s.SubjectId} value={s.SubjectId}>
-                      {s.SubjectCode} - {s.SubjectName}
-                    </option>
-                  ))}
+                  {loadingMappings ? (
+                    <option value="">Loading course subjects...</option>
+                  ) : !selectedCourseToken ? (
+                    <option value="">Select Course first...</option>
+                  ) : courseMappings.length === 0 ? (
+                    <option value="">No subjects mapped to this course</option>
+                  ) : (
+                    <>
+                      <option value="">Select Subject...</option>
+                      {courseMappings.map((m) => (
+                        <option key={m.Subject.SubjectId} value={m.Subject.SubjectId}>
+                          {m.Subject.SubjectCode} - {m.Subject.SubjectName} (Y{m.YearLevel} Sem{m.Semester})
+                        </option>
+                      ))}
+                    </>
+                  )}
                 </select>
               </div>
 
@@ -399,6 +523,9 @@ export default function AdminClassesPage() {
                     </option>
                   ))}
                 </select>
+                {semesterId && (
+                  <p className="text-[10px] text-emerald-600 mt-1 font-semibold">✓ Automatically assigned from curriculum mapping</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

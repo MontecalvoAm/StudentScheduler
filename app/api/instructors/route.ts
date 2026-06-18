@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole, ROLES, AuthError } from "@/lib/auth/rbac";
+import { requireRole, ROLES, AuthError, requirePermission } from "@/lib/auth/rbac";
 import { applySecurityHeaders } from "@/lib/security/headers";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireRole(req, ROLES.SUPER_ADMIN);
+    const user = await requirePermission(req, "users", "CanRead");
 
     const instructors = await prisma.m_Instructor.findMany({
       where: { DeletedAt: null },

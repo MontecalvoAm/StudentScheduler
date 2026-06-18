@@ -34,30 +34,61 @@ export const CreateUserSchema = z.object({
   LastName: z.string().min(1).max(100),
   MiddleName: z.string().max(100).optional(),
   RoleId: z.number().int().positive(),
+  Password: z.string().min(8, "Password must be at least 8 characters").max(128),
   // Role-specific
   StudentNumber: z.string().max(50).optional(),
   EmployeeNumber: z.string().max(50).optional(),
-  CourseId: z.number().int().positive().optional(),
+  CourseToken: z.string().optional(),
   YearLevel: z.number().int().min(1).max(6).optional(),
   Section: z.string().max(20).optional(),
   StudySession: z.enum(["DAY", "NIGHT"]).optional().nullable(),
   Department: z.string().max(100).optional(),
+  DepartmentToken: z.string().optional().nullable(),
 });
 
 export const UpdateUserSchema = z.object({
-  Email: z.string().email().max(255).optional(),
+  Email: z.string().email().max(255).optional().nullable(),
   FirstName: z.string().min(1).max(100).optional(),
   LastName: z.string().min(1).max(100).optional(),
   MiddleName: z.string().max(100).optional().nullable(),
   RoleId: z.number().int().positive().optional(),
   IsActive: z.boolean().optional(),
   IsLocked: z.boolean().optional(),
-  CourseId: z.number().int().positive().optional().nullable(),
+  Password: z.string().min(8).max(128).optional().nullable(),
+  CourseToken: z.string().optional().nullable(),
   YearLevel: z.number().int().min(1).max(6).optional().nullable(),
   Section: z.string().max(20).optional().nullable(),
   StudySession: z.enum(["DAY", "NIGHT"]).optional().nullable(),
   Department: z.string().max(100).optional().nullable(),
+  DepartmentToken: z.string().optional().nullable(),
+  StudentNumber: z.string().max(50).optional().nullable(),
+  EmployeeNumber: z.string().max(50).optional().nullable(),
 });
+
+// ─── Role Management ────────────────────────────────────────────────────────────────────────────────────
+export const PermissionEntrySchema = z.object({
+  ModuleKey: z.string().min(1).max(50),
+  CanCreate: z.boolean(),
+  CanRead:   z.boolean(),
+  CanUpdate: z.boolean(),
+  CanDelete: z.boolean(),
+});
+
+export const CreateRoleSchema = z.object({
+  RoleName:    z.string().min(1).max(50).toUpperCase(),
+  Description: z.string().max(255).optional(),
+  Permissions: z.array(PermissionEntrySchema).optional(),
+});
+
+export const UpdateRoleSchema = z.object({
+  RoleName:    z.string().min(1).max(50).toUpperCase().optional(),
+  Description: z.string().max(255).optional().nullable(),
+});
+
+export const UpdatePermissionsSchema = z.object({
+  Permissions: z.array(PermissionEntrySchema).min(1),
+});
+
 
 // ─── Academic Structure ───────────────────────────────────────────────────────
 export const CreateSchoolYearSchema = z
@@ -92,6 +123,7 @@ export const CreateCourseSchema = z.object({
   CourseCode: z.string().min(1).max(20).toUpperCase(),
   CourseName: z.string().min(1).max(200),
   Description: z.string().max(2000).optional(),
+  DepartmentToken: z.string().optional().nullable(),
 });
 
 export const CreateSubjectSchema = z.object({
@@ -176,12 +208,14 @@ export const PaginationSchema = z.object({
 
 export const UserListQuerySchema = PaginationSchema.extend({
   search: z.string().max(100).optional(),
-  roleId: z.coerce.number().int().positive().optional(),
+  roleToken: z.string().optional(),
   isActive: z.coerce.boolean().optional(),
   courseId: z.coerce.number().int().positive().optional(),
   yearLevel: z.coerce.number().int().min(1).max(6).optional(),
   section: z.string().max(20).optional(),
   studySession: z.enum(["DAY", "NIGHT"]).optional(),
+  startDate: z.coerce.date().optional(),
+  endDate: z.coerce.date().optional(),
 });
 
 export const SubjectListQuerySchema = PaginationSchema.extend({

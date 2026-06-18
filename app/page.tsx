@@ -28,12 +28,15 @@ function LoginForm() {
   const getDashboardRoute = (role: string) => {
     switch (role) {
       case "SUPER_ADMIN":
+      case "ADMIN":
         return "/dashboard/admin";
       case "INSTRUCTOR":
         return "/dashboard/instructor";
       case "STUDENT":
-      default:
         return "/dashboard/student";
+      default:
+        // Custom roles default to the admin dashboard
+        return "/dashboard/admin";
     }
   };
 

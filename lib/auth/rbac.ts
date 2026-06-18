@@ -5,6 +5,7 @@ import { verifyAccessToken, AccessTokenPayload } from "@/lib/auth/jwt";
 export const ROLES = {
   STUDENT: "STUDENT",
   INSTRUCTOR: "INSTRUCTOR",
+  ADMIN: "ADMIN",
   SUPER_ADMIN: "SUPER_ADMIN",
 } as const;
 
@@ -14,12 +15,22 @@ export type Role = (typeof ROLES)[keyof typeof ROLES];
 const ROLE_HIERARCHY: Role[] = [
   ROLES.STUDENT,
   ROLES.INSTRUCTOR,
+  ROLES.ADMIN,
   ROLES.SUPER_ADMIN,
 ];
 
 export function hasMinimumRole(userRole: string, minimumRole: Role): boolean {
+  if (userRole === ROLES.SUPER_ADMIN) return true;
+  
   const userIdx = ROLE_HIERARCHY.indexOf(userRole as Role);
   const minIdx = ROLE_HIERARCHY.indexOf(minimumRole);
+
+  // If role is not in standard hierarchy (custom role), treat as ADMIN-level for base routing
+  // Granular access is still enforced by requirePermission() on the API routes
+  if (userIdx === -1) {
+    return ROLE_HIERARCHY.indexOf(ROLES.ADMIN) >= minIdx;
+  }
+
   return userIdx >= minIdx;
 }
 
@@ -27,11 +38,6 @@ export function hasMinimumRole(userRole: string, minimumRole: Role): boolean {
 export const ROUTE_PERMISSIONS: Record<string, Role> = {
   "/dashboard/student": ROLES.STUDENT,
   "/dashboard/instructor": ROLES.INSTRUCTOR,
-  "/dashboard/admin": ROLES.SUPER_ADMIN,
-  "/api/admin": ROLES.SUPER_ADMIN,
-  "/api/attendance/session": ROLES.INSTRUCTOR,
-  "/api/attendance/override": ROLES.INSTRUCTOR,
-  "/api/reports": ROLES.INSTRUCTOR,
 };
 
 // ─── Server-Side Auth Guard ───────────────────────────────────────────────────
@@ -76,6 +82,87 @@ export async function requireRole(
     throw new AuthError(
       "FORBIDDEN",
       "You do not have permission to access this resource",
+      403
+    );
+  }
+
+  return user;
+}
+
+/**
+ * Permission guard that checks granular RBAC module permissions.
+ * SUPER_ADMIN bypasses this check entirely.
+ * Usage: const user = await requirePermission(req, "users", "CanRead");
+ */
+export async function requirePermission(
+  req: NextRequest,
+  moduleKey: string,
+  action: "CanRead" | "CanCreate" | "CanUpdate" | "CanDelete"
+): Promise<AccessTokenPayload> {
+  const user = await getAuthUser(req);
+
+  if (!user) {
+    throw new AuthError("UNAUTHORIZED", "Authentication required", 401);
+  }
+
+  // SUPER_ADMIN always has full access — skip DB lookup
+  if (user.role === ROLES.SUPER_ADMIN) return user;
+
+  // Lazy import prisma to keep this module lean
+  const { prisma } = await import("@/lib/prisma");
+
+  const roleRow = await prisma.m_Role.findFirst({
+    where: { RoleName: user.role, DeletedAt: null },
+    select: { RoleId: true },
+  });
+
+  if (!roleRow) {
+    throw new AuthError("FORBIDDEN", "Role not found", 403);
+  }
+
+  const permission = await prisma.m_RolePermission.findFirst({
+    where: {
+      RoleId:  roleRow.RoleId,
+      Module:  { ModuleKey: moduleKey, IsActive: true },
+      DeletedAt: null,
+    },
+    select: {
+      CanCreate: true,
+      CanRead:   true,
+      CanUpdate: true,
+      CanDelete: true,
+      ModuleId:  true,
+    },
+  });
+
+  let resolvedPerm = permission ? { ...permission } : { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false, ModuleId: null };
+
+  // If a role permission exists or we want to allow user overrides even if the role doesn't have a row
+  // We need to fetch the ModuleId first if not available
+  let modId = resolvedPerm.ModuleId;
+  if (!modId) {
+    const mod = await prisma.m_Module.findFirst({ where: { ModuleKey: moduleKey, IsActive: true }, select: { ModuleId: true } });
+    if (mod) modId = mod.ModuleId;
+  }
+
+  if (modId) {
+    const override = await prisma.m_UserPermissionOverride.findUnique({
+      where: { UserId_ModuleId: { UserId: user.userId, ModuleId: modId } },
+      select: { CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true }
+    });
+
+    if (override) {
+      if (override.CanCreate !== null) resolvedPerm.CanCreate = override.CanCreate;
+      if (override.CanRead !== null) resolvedPerm.CanRead = override.CanRead;
+      if (override.CanUpdate !== null) resolvedPerm.CanUpdate = override.CanUpdate;
+      if (override.CanDelete !== null) resolvedPerm.CanDelete = override.CanDelete;
+    }
+  }
+
+  if (!resolvedPerm || !resolvedPerm[action]) {
+    throw new AuthError(
+      "FORBIDDEN",
+      `You do not have ${action} permission on module '${moduleKey}'`,
       403
     );
   }
