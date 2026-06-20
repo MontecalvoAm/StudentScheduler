@@ -202,6 +202,7 @@ model M_Course {
   Students       M_Student[]
   Subjects       M_Subject[]
   CourseSubjects M_CourseSubject[]
+  Sections       M_Section[]
 
   @@index([DepartmentId])
   @@map("M_Course")
@@ -686,4 +687,49 @@ model M_UserPermissionOverride {
   @@unique([UserId, ModuleId])
   @@index([UserId])
   @@map("M_UserPermissionOverride")
+}
+
+// ─────────────────────────────────────────
+// MASTER: STUDY SESSIONS & SECTIONS
+// ─────────────────────────────────────────
+
+model M_StudySession {
+  StudySessionId    Int     @id @default(autoincrement())
+  StudySessionToken String  @unique @default(uuid()) @db.VarChar(36)
+  SessionLabel      String  @unique @db.VarChar(50) // e.g. "DAY", "NIGHT"
+  StartTime         String  @db.VarChar(5) // HH:MM 24h
+  EndTime           String  @db.VarChar(5) // HH:MM 24h
+  IsActive          Boolean @default(true)
+
+  // Standard Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  @@map("M_StudySession")
+}
+
+model M_Section {
+  SectionId    Int     @id @default(autoincrement())
+  SectionToken String  @unique @default(uuid()) @db.VarChar(36)
+  CourseId     Int
+  SectionName  String  @db.VarChar(50) // e.g. "1A"
+  IsActive     Boolean @default(true)
+
+  // Standard Audit Columns
+  CreatedBy Int?
+  CreatedAt DateTime  @default(now())
+  UpdatedBy Int?
+  UpdatedAt DateTime  @updatedAt
+  DeletedBy Int?
+  DeletedAt DateTime?
+
+  Course M_Course @relation(fields: [CourseId], references: [CourseId])
+
+  @@unique([CourseId, SectionName])
+  @@index([CourseId])
+  @@map("M_Section")
 }
