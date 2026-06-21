@@ -6,7 +6,9 @@ import {
   CalendarDays, 
   Plus, 
   X,
-  Layers
+  Layers,
+  Edit2,
+  Trash2
 } from "lucide-react";
 
 export default function SemestersTab() {
@@ -16,9 +18,17 @@ export default function SemestersTab() {
   const [loading, setLoading] = useState(true);
 
   // Form states
-  const [isOpen, setIsOpen] = useState(false);
+  const [modalType, setModalType] = useState<"none" | "schoolYear" | "semester">("none");
+  const [modalMode, setModalMode] = useState<"create" | "edit">("create");
+  const [editId, setEditId] = useState<number | null>(null);
   const [academicYear, setAcademicYear] = useState("");
+  const [syStartDate, setSyStartDate] = useState("");
+  const [syEndDate, setSyEndDate] = useState("");
+
   const [semesterTerm, setSemesterTerm] = useState("1st Semester");
+  const [semStartDate, setSemStartDate] = useState("");
+  const [semEndDate, setSemEndDate] = useState("");
+  const [selectedSchoolYearId, setSelectedSchoolYearId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const fetchSemestersData = async () => {
@@ -68,18 +78,68 @@ export default function SemestersTab() {
     }
   };
 
+  const handleDelete = async (type: "schoolYear" | "semester", id: number) => {
+    if (!window.confirm(`Are you sure you want to delete this ${type === "schoolYear" ? "school year" : "semester"}?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/semesters?type=${type}&id=${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        addToast({ type: "success", title: "Deleted", message: "Successfully deleted item." });
+        fetchSemestersData();
+      } else {
+        const result = await res.json().catch(() => ({ message: "Unknown error" }));
+        addToast({ type: "error", title: "Delete Failed", message: result.message || "Failed to delete item." });
+      }
+    } catch (err) {
+      console.error(err);
+      addToast({ type: "error", title: "Error", message: "Failed to delete item." });
+    }
+  };
+
+  const openEditModal = (type: "schoolYear" | "semester", item: any) => {
+    setModalType(type);
+    setModalMode("edit");
+    if (type === "schoolYear") {
+      setEditId(item.SchoolYearId);
+      setAcademicYear(item.YearLabel);
+      setSyStartDate(new Date(item.StartDate).toISOString().split("T")[0]);
+      setSyEndDate(new Date(item.EndDate).toISOString().split("T")[0]);
+    } else {
+      setEditId(item.SemesterId);
+      setSelectedSchoolYearId(item.SchoolYearId.toString());
+      setSemesterTerm(item.SemesterName);
+      setSemStartDate(new Date(item.StartDate).toISOString().split("T")[0]);
+      setSemEndDate(new Date(item.EndDate).toISOString().split("T")[0]);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
       const url = "/api/semesters";
-      const payload = {
-        academicYear,
-        semesterTerm,
-      };
+      const payload = modalType === "schoolYear" 
+        ? {
+            type: "schoolYear",
+            id: modalMode === "edit" ? editId : undefined,
+            yearLabel: academicYear,
+            startDate: syStartDate,
+            endDate: syEndDate
+          }
+        : {
+            type: "semester",
+            id: modalMode === "edit" ? editId : undefined,
+            schoolYearId: selectedSchoolYearId,
+            semesterName: semesterTerm,
+            startDate: semStartDate,
+            endDate: semEndDate
+          };
 
       const res = await fetch(url, {
-        method: "POST",
+        method: modalMode === "edit" ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -87,10 +147,10 @@ export default function SemestersTab() {
       if (res.ok) {
         addToast({ 
           type: "success", 
-          title: "Calendar Entry Created",
-          message: `Term successfully added.`
+          title: modalMode === "edit" ? "Updated" : "Created",
+          message: `${modalType === "schoolYear" ? "School Year" : "Semester"} successfully ${modalMode === "edit" ? "updated" : "added"}.`
         });
-        setIsOpen(false);
+        setModalType("none");
         resetForm();
         fetchSemestersData();
       } else {
@@ -106,8 +166,15 @@ export default function SemestersTab() {
   };
 
   const resetForm = () => {
+    setModalMode("create");
+    setEditId(null);
     setAcademicYear("");
+    setSyStartDate("");
+    setSyEndDate("");
     setSemesterTerm("1st Semester");
+    setSemStartDate("");
+    setSemEndDate("");
+    setSelectedSchoolYearId("");
   };
 
   return (
@@ -122,15 +189,26 @@ export default function SemestersTab() {
             <p className="text-[11px] text-slate-400 font-medium">Manage school years and semester periods.</p>
           </div>
         </div>
-        <button
-          onClick={() => {
-            resetForm();
-            setIsOpen(true);
-          }}
-          className="cursor-pointer flex items-center gap-2 bg-indigo-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
-        >
-          <Plus className="w-4 h-4" /> Add School Semester/Year
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              resetForm();
+              setModalType("schoolYear");
+            }}
+            className="cursor-pointer flex items-center gap-2 bg-slate-800 text-white font-bold text-xs px-4 py-2.5 rounded-xl hover:bg-slate-900 transition-colors shadow-lg"
+          >
+            <Plus className="w-4 h-4" /> Add School Year
+          </button>
+          <button
+            onClick={() => {
+              resetForm();
+              setModalType("semester");
+            }}
+            className="cursor-pointer flex items-center gap-2 bg-indigo-600 text-white font-bold text-xs px-4 py-2.5 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-100"
+          >
+            <Plus className="w-4 h-4" /> Add Semester
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -172,7 +250,21 @@ export default function SemestersTab() {
                               {sy.IsActive ? "ACTIVE" : "INACTIVE"}
                             </span>
                           </td>
-                          <td className="p-5 text-right">
+                          <td className="p-5 text-right space-x-2">
+                            <button
+                              onClick={() => openEditModal("schoolYear", sy)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                              title="Edit"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete("schoolYear", sy.SchoolYearId)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => handleToggleActive("schoolYear", sy.SchoolYearId, sy.IsActive)}
                               className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
@@ -227,7 +319,21 @@ export default function SemestersTab() {
                               {sem.IsActive ? "ACTIVE" : "INACTIVE"}
                             </span>
                           </td>
-                          <td className="p-5 text-right">
+                          <td className="p-5 text-right space-x-2">
+                            <button
+                              onClick={() => openEditModal("semester", sem)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                              title="Edit"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete("semester", sem.SemesterId)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                             <button
                               onClick={() => handleToggleActive("semester", sem.SemesterId, sem.IsActive)}
                               className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
@@ -250,11 +356,11 @@ export default function SemestersTab() {
         </div>
       )}
 
-      {isOpen && (
+      {modalType !== "none" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="glass w-full max-w-md rounded-3xl p-6 shadow-2xl relative bg-white">
             <button
-              onClick={() => setIsOpen(false)}
+              onClick={() => setModalType("none")}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-900 p-1 rounded-lg hover:bg-slate-100"
             >
               <X className="w-5 h-5" />
@@ -264,45 +370,110 @@ export default function SemestersTab() {
               <div className="inline-flex items-center justify-center p-3 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 mb-3">
                 <CalendarDays className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">Add School Semester/Year</h3>
+              <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                {modalMode === "edit" ? "Edit " : "Add "}
+                {modalType === "schoolYear" ? "School Year" : "Semester"}
+              </h3>
               <p className="text-[11px] text-slate-500 mt-1 font-medium">
-                Create a new academic period to assign to classes.
+                {modalMode === "edit" ? "Update details for this academic period." : (modalType === "schoolYear" ? "Create a new academic year." : "Create a new semester period for a school year.")}
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Academic Year</label>
-                <input
-                  type="text"
-                  required
-                  value={academicYear}
-                  onChange={(e) => setAcademicYear(e.target.value)}
-                  placeholder="e.g. 2025-2026"
-                  className="w-full px-4 py-2.5 rounded-xl text-slate-800 glass-input text-xs font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Semester</label>
-                <select
-                  required
-                  value={semesterTerm}
-                  onChange={(e) => setSemesterTerm(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl text-slate-800 glass-input text-xs font-bold bg-white"
-                >
-                  <option value="1st Semester">1st Semester</option>
-                  <option value="2nd Semester">2nd Semester</option>
-                  <option value="Summer">Summer</option>
-                </select>
-              </div>
+              {modalType === "schoolYear" ? (
+                <>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Academic Year Label</label>
+                    <input
+                      type="text"
+                      required
+                      value={academicYear}
+                      onChange={(e) => setAcademicYear(e.target.value)}
+                      placeholder="e.g. 2026-2027"
+                      className="w-full px-4 py-2.5 rounded-xl text-slate-800 glass-input text-xs font-bold"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Start Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={syStartDate}
+                        onChange={(e) => setSyStartDate(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl text-slate-800 glass-input text-xs font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">End Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={syEndDate}
+                        onChange={(e) => setSyEndDate(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl text-slate-800 glass-input text-xs font-bold"
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">School Year</label>
+                    <select
+                      required
+                      value={selectedSchoolYearId}
+                      onChange={(e) => setSelectedSchoolYearId(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl text-slate-800 glass-input text-xs font-bold bg-white"
+                    >
+                      <option value="" disabled>Select School Year</option>
+                      {schoolYearsList.map((sy) => (
+                        <option key={sy.SchoolYearId} value={sy.SchoolYearId}>{sy.YearLabel}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Semester Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={semesterTerm}
+                      onChange={(e) => setSemesterTerm(e.target.value)}
+                      placeholder="e.g. 1st Semester"
+                      className="w-full px-4 py-2.5 rounded-xl text-slate-800 glass-input text-xs font-bold"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Start Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={semStartDate}
+                        onChange={(e) => setSemStartDate(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl text-slate-800 glass-input text-xs font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">End Date</label>
+                      <input
+                        type="date"
+                        required
+                        value={semEndDate}
+                        onChange={(e) => setSemEndDate(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl text-slate-800 glass-input text-xs font-bold"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <button
                 type="submit"
                 disabled={submitting}
                 className="cursor-pointer w-full py-3 px-4 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-150 disabled:bg-slate-300 mt-4"
               >
-                {submitting ? "Saving changes..." : "Create Calendar Entry"}
+                {submitting ? "Saving changes..." : `${modalMode === "edit" ? "Save Changes" : "Create"} ${modalType === "schoolYear" ? "School Year" : "Semester"}`}
               </button>
             </form>
           </div>

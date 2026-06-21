@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
         CourseId: course.CourseId,
         SectionName: SectionName,
         IsActive: true,
-        CreatedBy: user.UserId,
+        CreatedBy: user.userId,
       },
     });
 

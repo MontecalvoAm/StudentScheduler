@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
         StartTime: startTime,
         EndTime: endTime,
         IsActive: true,
-        CreatedBy: user.UserId,
+        CreatedBy: user.userId,
       },
     });
 
